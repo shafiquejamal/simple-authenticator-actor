@@ -13,9 +13,9 @@ lazy val root = (project in file(".")).
     libraryDependencies ++= Seq(
       "com.typesafe.akka" %% "akka-actor" % akkaVersion,
       "com.typesafe.akka" %% "akka-testkit" % akkaVersion % Test,
-      "com.github.shafiquejamal" %% "utils" % "[0.0.4,)",
-      "com.github.shafiquejamal" %% "utils-test" % "[0.0.4,)" % Test,
-      "com.github.shafiquejamal" %% "access-api" % "[0.0.13,)",
+      "com.github.shafiquejamal" %% "utils" % "0.0.4",
+      "com.github.shafiquejamal" %% "utils-test" % "0.0.4" % Test,
+      "com.github.shafiquejamal" %% "access-api" % "0.0.19",
 			scalaTest % Test
 		)
   )

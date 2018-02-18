@@ -24,35 +24,33 @@ class Authenticator[US, R, J] (
     unnamedClient: ActorRef,
     passwordResetCodeSender: PasswordResetCodeSender[UserDetails[US], R],
     accountActivationCodeSender:AccountActivationCodeSender[UserDetails[US], US],
-    toServerMessageRouter: ActorRef,
-    logMeOutMessage: LogMeOutMessage,
-    yourLoginAttemptFailedMessage: YourLoginAttemptFailedMessage[J],
-    yourLoginAttemptSucceededMessage: (String, String, String) => YourLoginAttemptSucceededMessage[J],
+    logMeOutMessage: (UUID, Option[UUID]) => LogMeOutMessage,
+    yourLoginAttemptFailedMessage: (UUID, Option[UUID]) => YourLoginAttemptFailedMessage[J],
+    yourLoginAttemptSucceededMessage: (UUID, Option[UUID], String, String, String) => YourLoginAttemptSucceededMessage[J],
     passwordResetActions: UserDetails[US] => Unit,
-    passwordResetCodeSentMessage: PasswordResetCodeSentMessage[J],
-    passwordResetSuccessfulMessage: PasswordResetSuccessfulMessage[J],
-    passwordResetFailedMessage: PasswordResetFailedMessage[J],
-    emailIsAvailableMessage: (String, Boolean) => EmailIsAvailableMessage[J],
-    usernameIsAvailableMessage: (String, Boolean) => UsernameIsAvailableMessage[J],
-    yourRegistrationAttemptFailedMessage: YourRegistrationAttemptFailedMessage[J],
-    yourRegistrationAttemptSucceededMessage: YourRegistrationAttemptSucceededMessage[J],
+    passwordResetCodeSentMessage: (UUID, Option[UUID]) => PasswordResetCodeSentMessage[J],
+    passwordResetSuccessfulMessage: (UUID, Option[UUID]) => PasswordResetSuccessfulMessage[J],
+    passwordResetFailedMessage: (UUID, Option[UUID]) => PasswordResetFailedMessage[J],
+    emailIsAvailableMessage: (UUID, Option[UUID], String, Boolean) => EmailIsAvailableMessage[J],
+    usernameIsAvailableMessage: (UUID, Option[UUID], String, Boolean) => UsernameIsAvailableMessage[J],
+    yourRegistrationAttemptFailedMessage: (UUID, Option[UUID]) => YourRegistrationAttemptFailedMessage[J],
+    yourRegistrationAttemptSucceededMessage: (UUID, Option[UUID]) => YourRegistrationAttemptSucceededMessage[J],
     activationCodeKey: String,
-    accountActivationAttemptFailedMessage: String => AccountActivationAttemptFailedMessage[J],
-    accountActivationAttemptSucceededMessage: AccountActivationAttemptSucceededMessage[J],
+    accountActivationAttemptFailedMessage: (UUID, Option[UUID], String) => AccountActivationAttemptFailedMessage[J],
     accountActivationCodeCreator: AccountActivationCodeCreator,
-    resendActivationCodeResultMessage: String => ResendActivationCodeResultMessage[J],
+    resendActivationCodeResultMessage: (UUID, Option[UUID], String) => ResendActivationCodeResultMessage[J],
     userActivator: UserActivator[UserDetails[US], AccountActivationAttemptResultMessage[J]],
-    youAreAlreadyAuthenticatedMessage: YouAreAlreadyAuthenticatedMessage[J],
-    loggingYouOutMessage: LoggingYouOutMessage[J],
+    youAreAlreadyAuthenticatedMessage: (UUID, Option[UUID]) => YouAreAlreadyAuthenticatedMessage[J],
+    loggingYouOutMessage: (UUID, Option[UUID]) => LoggingYouOutMessage[J],
     clientPaths: ClientPaths,
-    changePasswordFailedMessage: ChangePasswordFailedMessage[J],
-    changePasswordSucceededMessage: ChangePasswordSucceededMessage[J],
+    changePasswordFailedMessage: (UUID, Option[UUID]) => ChangePasswordFailedMessage[J],
+    changePasswordSucceededMessage: (UUID, Option[UUID]) => ChangePasswordSucceededMessage[J],
     messageRouterPropsCreator: MessageRouterPropsCreator,
     namedClientProps: (ActorRef, ActorRef) => Props,
-    requestChangeEmailFailedMessage: RequestChangeEmailFailedMessage[J],
-    requestChangeEmailSucceededMessage: RequestChangeEmailSucceededMessage[J],
-    activateNewEmailFailedMessage: ActivateNewEmailFailedMessage[J],
-    activateNewEmailSucceededMessage: ActivateNewEmailSucceededMessage[J])
+    requestChangeEmailFailedMessage: (UUID, Option[UUID]) => RequestChangeEmailFailedMessage[J],
+    requestChangeEmailSucceededMessage: (UUID, Option[UUID]) => RequestChangeEmailSucceededMessage[J],
+    activateNewEmailFailedMessage: (UUID, Option[UUID]) => ActivateNewEmailFailedMessage[J],
+    activateNewEmailSucceededMessage: (UUID, Option[UUID]) => ActivateNewEmailSucceededMessage[J])
   extends Actor with ActorLogging {
 
   override def receive: Receive = {
@@ -64,7 +62,7 @@ class Authenticator[US, R, J] (
         userTokenValidator.blockToExecuteIfUnauthorized)
 
       maybeValidUser.fold {
-        unnamedClient ! loggingYouOutMessage.add(authenticateMeMessage).toJSON
+        unnamedClient ! loggingYouOutMessage(uUIDProvider.randomUUID(), Some(authenticateMeMessage.iD)).toJSON
       } { userContact => createNamedClientAndRouter(userContact.userID, userContact.username, userContact.email) }
 
     case logMeInMessage: LogMeInMessage =>
@@ -74,17 +72,21 @@ class Authenticator[US, R, J] (
             logMeInMessage.maybeEmail,
             logMeInMessage.password)
 
-      val response = maybeUserDetails.fold[LoginAttemptResultMessage[J]](yourLoginAttemptFailedMessage){ userDetails =>
+      val response = maybeUserDetails
+        .fold[LoginAttemptResultMessage[J]](
+          yourLoginAttemptFailedMessage(uUIDProvider.randomUUID(), Some(logMeInMessage.iD))){ userDetails =>
         val jWT = jWTCreator.create(userDetails, timeProvider.now())
-        yourLoginAttemptSucceededMessage(userDetails.username, userDetails.email, jWT)
+        yourLoginAttemptSucceededMessage(
+            uUIDProvider.randomUUID(), Some(logMeInMessage.iD), userDetails.username, userDetails.email, jWT)
       }
 
-      unnamedClient ! response.add(logMeInMessage).toJSON
+      unnamedClient ! response.toJSON
 
     case passwordResetCodeRequestMessage: PasswordResetCodeRequestMessage =>
       val maybeUser = userAPI.findByEmailLatest(passwordResetCodeRequestMessage.email)
       maybeUser.fold[Unit](){ userDetails => passwordResetActions(userDetails) }
-      unnamedClient ! passwordResetCodeSentMessage.add(passwordResetCodeRequestMessage).toJSON
+      unnamedClient ! passwordResetCodeSentMessage(
+          uUIDProvider.randomUUID(), Some(passwordResetCodeRequestMessage.iD)).toJSON
 
     case resetPasswordMessage: ResetMyPasswordMessage =>
       authenticationAPI
@@ -93,18 +95,20 @@ class Authenticator[US, R, J] (
           resetPasswordMessage.code.replaceAll("-", ""),
           resetPasswordMessage.newPassword) match {
         case Success(user) =>
-          unnamedClient ! passwordResetSuccessfulMessage.add(resetPasswordMessage).toJSON
+          unnamedClient ! passwordResetSuccessfulMessage(uUIDProvider.randomUUID(), Some(resetPasswordMessage.iD)).toJSON
         case Failure(_) =>
-          unnamedClient ! passwordResetFailedMessage.add(resetPasswordMessage).toJSON
+          unnamedClient ! passwordResetFailedMessage(uUIDProvider.randomUUID(), Some(resetPasswordMessage.iD)).toJSON
       }
 
     case isEmailAvailableMessage : IsEmailAvailableMessage =>
       val isEmailAvailable: Boolean = registrationAPI.isEmailIsAvailable(isEmailAvailableMessage.email)
-      unnamedClient ! emailIsAvailableMessage(isEmailAvailableMessage.email, isEmailAvailable).add(isEmailAvailableMessage).toJSON
+      unnamedClient ! emailIsAvailableMessage(
+          uUIDProvider.randomUUID(), Some(isEmailAvailableMessage.iD), isEmailAvailableMessage.email, isEmailAvailable).toJSON
 
     case isUsernameAvailableMessage: IsUsernameAvailableMessage =>
       val isUsernameAvailable: Boolean = registrationAPI.isUsernameIsAvailable(isUsernameAvailableMessage.username)
-      unnamedClient ! usernameIsAvailableMessage(isUsernameAvailableMessage.username, isUsernameAvailable).add(isUsernameAvailableMessage).toJSON
+      unnamedClient ! usernameIsAvailableMessage(
+          uUIDProvider.randomUUID(), Some(isUsernameAvailableMessage.iD), isUsernameAvailableMessage.username, isUsernameAvailable).toJSON
 
     case registerMeMessage: RegisterMeMessage =>
       val maybeUserDetails =
@@ -112,55 +116,57 @@ class Authenticator[US, R, J] (
             registerMeMessage.maybeUsername, registerMeMessage.email, registerMeMessage.password,
             accountActivationCodeSender.statusOnRegistration)
       val response = maybeUserDetails
-        .toOption.fold[RegistrationAttemptResultMessage[J]](yourRegistrationAttemptFailedMessage){ userDetails =>
+        .toOption.fold[RegistrationAttemptResultMessage[J]](
+            yourRegistrationAttemptFailedMessage(uUIDProvider.randomUUID(), Some(registerMeMessage.iD))
+        ){ userDetails =>
           val activationCode = accountActivationCodeCreator.generate(userDetails.userID.toString, activationCodeKey)
           accountActivationCodeSender.sendActivationCode(userDetails.username, userDetails.email, activationCode)
-          yourRegistrationAttemptSucceededMessage
+          yourRegistrationAttemptSucceededMessage(uUIDProvider.randomUUID(), Some(registerMeMessage.iD))
       }
-      unnamedClient ! response.add(registerMeMessage).toJSON
+      unnamedClient ! response.toJSON
 
     case activateMyAccountMessage: ActivateMyAccountMessage =>
       val (email, code) = (activateMyAccountMessage.emailOrUsername, activateMyAccountMessage.code)
 
       val response = userAPI.findByEmailLatest(email).fold[AccountActivationAttemptResultMessage[J]](
-        accountActivationAttemptFailedMessage("User does not exist")
+        accountActivationAttemptFailedMessage(uUIDProvider.randomUUID(), Some(activateMyAccountMessage.iD), "User does not exist")
       ) { user: UserDetails[US] =>
         if (accountActivationCodeCreator.isMatch(user.userID.toString, code, activationCodeKey)) {
           userActivator.activateUser(user, code)
         } else {
-          accountActivationAttemptFailedMessage("Incorrect code")
+          accountActivationAttemptFailedMessage(uUIDProvider.randomUUID(), Some(activateMyAccountMessage.iD), "Incorrect code")
         }
       }
 
-      unnamedClient ! response.add(activateMyAccountMessage).toJSON
+      unnamedClient ! response.toJSON
 
     case resendMyActivationCodeMessage: ResendMyActivationCodeMessage =>
       val response = userAPI.findUnverifiedUser(resendMyActivationCodeMessage.email).fold[ResendActivationCodeResultMessage[J]](
-        resendActivationCodeResultMessage("User not registered or already verified")
+        resendActivationCodeResultMessage(uUIDProvider.randomUUID(), Some(resendMyActivationCodeMessage.iD), "User not registered or already verified")
       ) { user =>
         accountActivationCodeSender.sendActivationCode(user.username, user.email, activationCodeKey)
-        resendActivationCodeResultMessage("Code sent")
+        resendActivationCodeResultMessage(uUIDProvider.randomUUID(), Some(resendMyActivationCodeMessage.iD), "Code sent")
       }
-      unnamedClient ! response.add(resendMyActivationCodeMessage).toJSON
+      unnamedClient ! response.toJSON
 
   }
 
   def processAuthenticatedRequests(clientUserID: UUID, email: String, messageRouter: ActorRef): Receive = {
 
     case m: AuthenticateMeMessage  =>
-      unnamedClient ! youAreAlreadyAuthenticatedMessage.add(m).toJSON
+      unnamedClient ! youAreAlreadyAuthenticatedMessage(uUIDProvider.randomUUID(), Some(m.iD)).toJSON
 
     case m: LogMeInMessage =>
-      unnamedClient ! youAreAlreadyAuthenticatedMessage.add(m).toJSON
+      unnamedClient ! youAreAlreadyAuthenticatedMessage(uUIDProvider.randomUUID(), Some(m.iD)).toJSON
 
     case m: LogMeOutMessage =>
-      unnamedClient ! loggingYouOutMessage.add(m).toJSON
+      unnamedClient ! loggingYouOutMessage(uUIDProvider.randomUUID(), Some(m.iD)).toJSON
       context.unbecome()
 
     case m: LogMeOutOfAllDevicesMessage =>
       authenticationAPI logoutAllDevices clientUserID
       val allAuthenticatorsForThisUser = context.actorSelection(clientPaths.namedClientPath(clientUserID))
-      allAuthenticatorsForThisUser ! logMeOutMessage.add(m)
+      allAuthenticatorsForThisUser ! logMeOutMessage(uUIDProvider.randomUUID(), Some(m.iD))
 
     case changePasswordMessage: ChangeMyPasswordMessage =>
       val maybeUser = authenticationAPI.user(clientUserID, changePasswordMessage.currentPassword)
@@ -168,26 +174,27 @@ class Authenticator[US, R, J] (
         userAPI.changePassword(clientUserID, changePasswordMessage.newPassword).toOption
       }
 
-      val response = maybeUserDetails.fold[ChangePasswordAttemptResultMessage[J]](changePasswordFailedMessage){ _ =>
-        changePasswordSucceededMessage }
+      val response = maybeUserDetails.fold[ChangePasswordAttemptResultMessage[J]](
+          changePasswordFailedMessage(uUIDProvider.randomUUID(), Some(changePasswordMessage.iD))){ _ =>
+        changePasswordSucceededMessage(uUIDProvider.randomUUID(), Some(changePasswordMessage.iD)) }
       context.unbecome()
 
-      unnamedClient ! response.add(changePasswordMessage).toJSON
+      unnamedClient ! response.toJSON
 
     case requestChangeEmailMessage: RequestChangeEmailMessage =>
       userAPI.requestChangeEmail(clientUserID, requestChangeEmailMessage.newEmail) match {
         case Success(_) =>
-          unnamedClient ! requestChangeEmailSucceededMessage.add(requestChangeEmailMessage).toJSON
+          unnamedClient ! requestChangeEmailSucceededMessage(uUIDProvider.randomUUID(), Some(requestChangeEmailMessage.iD)).toJSON
         case Failure(_) =>
-          unnamedClient ! requestChangeEmailFailedMessage.add(requestChangeEmailMessage).toJSON
+          unnamedClient ! requestChangeEmailFailedMessage(uUIDProvider.randomUUID(), Some(requestChangeEmailMessage.iD)).toJSON
       }
 
     case activateNewEmailMessage: ActivateNewEmailMessage =>
       userAPI.activateNewEmail(clientUserID, email, activateNewEmailMessage.newEmail, activateNewEmailMessage.code) match {
         case Success(_) =>
-          unnamedClient ! activateNewEmailSucceededMessage.add(activateNewEmailMessage).toJSON
+          unnamedClient ! activateNewEmailSucceededMessage(uUIDProvider.randomUUID(), Some(activateNewEmailMessage.iD)).toJSON
         case Failure(_) =>
-          unnamedClient ! activateNewEmailFailedMessage.add(activateNewEmailMessage).toJSON
+          unnamedClient ! activateNewEmailFailedMessage(uUIDProvider.randomUUID(), Some(activateNewEmailMessage.iD)).toJSON
       }
 
     case msg =>
@@ -221,35 +228,33 @@ object Authenticator {
       unnamedClient: ActorRef,
       passwordResetCodeSender: PasswordResetCodeSender[UserDetails[US], R],
       accountActivationLinkSender:AccountActivationCodeSender[UserDetails[US], US],
-      toServerMessageRouter: ActorRef,
-      logMeOutMessage: LogMeOutMessage,
-      yourLoginAttemptFailedMessage: YourLoginAttemptFailedMessage[J],
-      yourLoginAttemptSucceededMessage: (String, String, String) => YourLoginAttemptSucceededMessage[J],
+      logMeOutMessage: (UUID, Option[UUID]) => LogMeOutMessage,
+      yourLoginAttemptFailedMessage: (UUID, Option[UUID]) => YourLoginAttemptFailedMessage[J],
+      yourLoginAttemptSucceededMessage: (UUID, Option[UUID], String, String, String) => YourLoginAttemptSucceededMessage[J],
       passwordResetActions: UserDetails[US] => Unit,
-      passwordResetCodeSentMessage: PasswordResetCodeSentMessage[J],
-      passwordResetSuccessfulMessage: PasswordResetSuccessfulMessage[J],
-      passwordResetFailedMessage: PasswordResetFailedMessage[J],
-      emailIsAvailableMessage: (String, Boolean) => EmailIsAvailableMessage[J],
-      usernameIsAvailableMessage: (String, Boolean) => UsernameIsAvailableMessage[J],
-      yourRegistrationAttemptFailedMessage: YourRegistrationAttemptFailedMessage[J],
-      yourRegistrationAttemptSucceededMessage: YourRegistrationAttemptSucceededMessage[J],
+      passwordResetCodeSentMessage: (UUID, Option[UUID]) => PasswordResetCodeSentMessage[J],
+      passwordResetSuccessfulMessage: (UUID, Option[UUID]) => PasswordResetSuccessfulMessage[J],
+      passwordResetFailedMessage: (UUID, Option[UUID]) => PasswordResetFailedMessage[J],
+      emailIsAvailableMessage: (UUID, Option[UUID], String, Boolean) => EmailIsAvailableMessage[J],
+      usernameIsAvailableMessage: (UUID, Option[UUID], String, Boolean) => UsernameIsAvailableMessage[J],
+      yourRegistrationAttemptFailedMessage: (UUID, Option[UUID]) => YourRegistrationAttemptFailedMessage[J],
+      yourRegistrationAttemptSucceededMessage: (UUID, Option[UUID]) => YourRegistrationAttemptSucceededMessage[J],
       activationCodeKey: String,
-      accountActivationAttemptFailedMessage: String => AccountActivationAttemptFailedMessage[J],
-      accountActivationAttemptSucceededMessage: AccountActivationAttemptSucceededMessage[J],
+      accountActivationAttemptFailedMessage: (UUID, Option[UUID], String) => AccountActivationAttemptFailedMessage[J],
       accountActivationCodeCreator: AccountActivationCodeCreator,
-      resendActivationCodeResultMessage: String => ResendActivationCodeResultMessage[J],
+      resendActivationCodeResultMessage: (UUID, Option[UUID], String) => ResendActivationCodeResultMessage[J],
       userActivator: UserActivator[UserDetails[US], AccountActivationAttemptResultMessage[J]],
-      youAreAlreadyAuthenticatedMessage: YouAreAlreadyAuthenticatedMessage[J],
-      loggingYouOutMessage: LoggingYouOutMessage[J],
+      youAreAlreadyAuthenticatedMessage: (UUID, Option[UUID]) => YouAreAlreadyAuthenticatedMessage[J],
+      loggingYouOutMessage: (UUID, Option[UUID]) => LoggingYouOutMessage[J],
       clientPaths: ClientPaths,
-      changePasswordFailedMessage: ChangePasswordFailedMessage[J],
-      changePasswordSucceededMessage: ChangePasswordSucceededMessage[J],
+      changePasswordFailedMessage: (UUID, Option[UUID]) => ChangePasswordFailedMessage[J],
+      changePasswordSucceededMessage: (UUID, Option[UUID]) => ChangePasswordSucceededMessage[J],
       messageRouterPropsCreator: MessageRouterPropsCreator,
       namedClientProps: (ActorRef, ActorRef) => Props,
-      requestChangeEmailFailedMessage: RequestChangeEmailFailedMessage[J],
-      requestChangeEmailSucceededMessage: RequestChangeEmailSucceededMessage[J],
-      activateNewEmailFailedMessage: ActivateNewEmailFailedMessage[J],
-      activateNewEmailSucceededMessage: ActivateNewEmailSucceededMessage[J]) =
+      requestChangeEmailFailedMessage: (UUID, Option[UUID]) => RequestChangeEmailFailedMessage[J],
+      requestChangeEmailSucceededMessage: (UUID, Option[UUID]) => RequestChangeEmailSucceededMessage[J],
+      activateNewEmailFailedMessage: (UUID, Option[UUID]) => ActivateNewEmailFailedMessage[J],
+      activateNewEmailSucceededMessage: (UUID, Option[UUID]) => ActivateNewEmailSucceededMessage[J]) =
     Props(
       new Authenticator(
         userTokenValidator,
@@ -262,7 +267,6 @@ object Authenticator {
         unnamedClient,
         passwordResetCodeSender,
         accountActivationLinkSender,
-        toServerMessageRouter,
         logMeOutMessage,
         yourLoginAttemptFailedMessage,
         yourLoginAttemptSucceededMessage,
@@ -276,7 +280,6 @@ object Authenticator {
         yourRegistrationAttemptSucceededMessage,
         activationCodeKey,
         accountActivationAttemptFailedMessage,
-        accountActivationAttemptSucceededMessage,
         accountActivationCodeCreator,
         resendActivationCodeResultMessage,
         userActivator,
@@ -291,5 +294,4 @@ object Authenticator {
         requestChangeEmailSucceededMessage,
         activateNewEmailFailedMessage,
         activateNewEmailSucceededMessage))
-
 }
