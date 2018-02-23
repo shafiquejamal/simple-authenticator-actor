@@ -73,7 +73,14 @@ object AuthenticatorMessagesFixture {
       override val previousMessageID: Option[UUID],
       override val errorMessage: String)
     extends AccountActivationAttemptFailedMessage[String] {
-    override def toJSON: String = s"_${iD.toString}"
+    override def toJSON: String = s"AccountActivationAttemptFailedMessageImpl_${iD.toString}"
+  }
+
+  case class AccountActivationAttemptSucceededMessageImpl(
+      override val iD: UUID,
+      override val previousMessageID: Option[UUID])
+    extends AccountActivationAttemptSucceededMessage[String] {
+    override def toJSON: String = s"AccountActivationAttemptSucceededMessageImpl_${iD.toString}"
   }
 
   case class ResendActivationCodeResultMessageImpl(
