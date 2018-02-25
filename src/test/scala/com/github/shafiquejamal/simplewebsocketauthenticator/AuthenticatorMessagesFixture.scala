@@ -46,7 +46,8 @@ object AuthenticatorMessagesFixture {
       override val email: String,
       override val isEmailIsAvailable: Boolean)
     extends EmailIsAvailableMessage[String] {
-    override def toJSON: String = s"EmailIsAvailableMessageImpl_${iD.toString}_${previousMessageID.get.toString}_${email}_$isEmailIsAvailable"
+    override def toJSON: String =
+      s"EmailIsAvailableMessageImpl_${iD.toString}_${previousMessageID.get.toString}_${email}_$isEmailIsAvailable"
   }
 
   case class UsernameIsAvailableMessageImpl(
@@ -54,7 +55,8 @@ object AuthenticatorMessagesFixture {
       override val previousMessageID: Option[UUID],
       override val username: String,
       override val isUsernameIsAvailable: Boolean) extends UsernameIsAvailableMessage[String] {
-    override def toJSON: String = s"EmailIsAvailableMessageImpl_${iD.toString}"
+    override def toJSON: String =
+      s"UsernameIsAvailableMessageImpl_${iD.toString}_${previousMessageID.get.toString}_${username}_$isUsernameIsAvailable"
   }
 
   case class YourRegistrationAttemptFailedMessageImpl(

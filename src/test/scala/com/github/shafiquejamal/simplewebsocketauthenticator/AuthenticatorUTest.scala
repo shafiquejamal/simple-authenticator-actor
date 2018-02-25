@@ -7,7 +7,7 @@ import akka.testkit.TestKit
 import com.github.shafiquejamal.accessapi.access.authentication.{AuthenticationAPI, JWTCreator, TokenValidator}
 import com.github.shafiquejamal.accessapi.access.registration.{AccountActivationCodeSender, RegistrationAPI, UserActivator}
 import com.github.shafiquejamal.accessapi.user.{UserAPI, UserDetails}
-import com.github.shafiquejamal.accessmessage.InBound.IsEmailAvailableMessage
+import com.github.shafiquejamal.accessmessage.InBound.{IsEmailAvailableMessage, IsUsernameAvailableMessage}
 import com.github.shafiquejamal.accessmessage.OutBound.AccountActivationAttemptResultMessage
 import com.github.shafiquejamal.simplewebsocketauthenticator.AuthenticatorMessagesFixture._
 import com.github.shafiquejamal.util.id.TestUUIDProviderImpl
@@ -28,11 +28,12 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
   trait Fixture {
     val timeProvider = new TestJavaInstantTimeProvider()
     val uUIDProvider = new TestUUIDProviderImpl()
-    uUIDProvider.index = 200
-    val newMessageuUID = uUIDProvider.randomUUID()
+
+    def resetUUID(): Unit = uUIDProvider.index = 200
     uUIDProvider.index = 0
     val originatingMessageUUID = uUIDProvider.randomUUID()
-    uUIDProvider.index = 200
+    resetUUID()
+    val newMessageuUID = uUIDProvider.randomUUID()
   }
 
   trait MocksFixture {
@@ -119,24 +120,40 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
   }
 
   "The authenticator" should "send back a message indicating that an email address is available if it is available" in
-    new AuthenticatorFixture {
+  new AuthenticatorFixture {
 
       val emailToCheck = "some@email.com"
-      val isEmailAvailableMessage = new IsEmailAvailableMessage {
-        override def email: String = emailToCheck
+      val isEmailAvailableMessage: IsEmailAvailableMessage = new IsEmailAvailableMessage {
+        override val email: String = emailToCheck
 
-        override def iD: UUID = originatingMessageUUID
+        override val iD: UUID = originatingMessageUUID
       }
 
-      authenticator ! isEmailAvailableMessage
-      (registrationAPI.isEmailIsAvailable _).expects(emailToCheck).returning(true)
-      expectMsg(emailIsAvailableMessage(newMessageuUID, Some(originatingMessageUUID), emailToCheck, true).toJSON)
-      (registrationAPI.isEmailIsAvailable _).expects(emailToCheck).returning(false)
+      Seq(true, false).foreach { isEmailAvailability =>
+        resetUUID()
+        (registrationAPI.isEmailIsAvailable _).expects(emailToCheck).returning(isEmailAvailability)
+        authenticator ! isEmailAvailableMessage
+        expectMsg(emailIsAvailableMessage(
+            newMessageuUID, Some(originatingMessageUUID), emailToCheck, isEmailAvailability).toJSON)
+      }
 
-      uUIDProvider.index = 200
-      authenticator ! isEmailAvailableMessage
-      expectMsg(emailIsAvailableMessage(newMessageuUID, Some(originatingMessageUUID), emailToCheck, false).toJSON)
+   }
+
+  it should "indicate whether a username is available" in new AuthenticatorFixture {
+    val usernameToCheck = "some-user-name"
+    val isUsernameAvailableMessage: IsUsernameAvailableMessage = new IsUsernameAvailableMessage {
+      override val username: String = usernameToCheck
+
+      override val iD: UUID = originatingMessageUUID
     }
 
+    Seq(true, false).foreach { isUsernameAvailability =>
+      resetUUID()
+      (registrationAPI.isUsernameIsAvailable _).expects(usernameToCheck).returning(isUsernameAvailability)
+      authenticator ! isUsernameAvailableMessage
+      expectMsg(usernameIsAvailableMessage(
+          newMessageuUID, Some(originatingMessageUUID), usernameToCheck, isUsernameAvailability).toJSON)
+    }
+  }
 
 }
