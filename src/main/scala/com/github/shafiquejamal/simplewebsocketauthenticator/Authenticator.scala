@@ -48,7 +48,8 @@ class Authenticator[US, R, J] (
     requestChangeEmailFailedMessage: (UUID, Option[UUID]) => RequestChangeEmailFailedMessage[J],
     requestChangeEmailSucceededMessage: (UUID, Option[UUID]) => RequestChangeEmailSucceededMessage[J],
     activateNewEmailFailedMessage: (UUID, Option[UUID]) => ActivateNewEmailFailedMessage[J],
-    activateNewEmailSucceededMessage: (UUID, Option[UUID]) => ActivateNewEmailSucceededMessage[J])
+    activateNewEmailSucceededMessage: (UUID, Option[UUID]) => ActivateNewEmailSucceededMessage[J],
+    authenticationSuccessfulMessage: (UUID, Option[UUID]) => AuthenticationSuccessfulMessage[J])
   extends Actor with ActorLogging {
 
   override def receive: Receive = {
@@ -61,7 +62,11 @@ class Authenticator[US, R, J] (
 
       maybeValidUser.fold {
         unnamedClient ! loggingYouOutMessage(uUIDProvider.randomUUID(), Some(authenticateMeMessage.iD)).toJSON
-      } { userContact => createNamedClientAndRouter(userContact.userID, userContact.username, userContact.email) }
+      } { userContact =>
+        createNamedClientAndRouter(userContact.userID, userContact.username, userContact.email)
+        unnamedClient ! authenticationSuccessfulMessage(
+            uUIDProvider.randomUUID(), Some(authenticateMeMessage.iD)).toJSON
+      }
 
     case logMeInMessage: LogMeInMessage =>
       val maybeUserDetails =
@@ -261,7 +266,8 @@ object Authenticator {
       requestChangeEmailFailedMessage: (UUID, Option[UUID]) => RequestChangeEmailFailedMessage[J],
       requestChangeEmailSucceededMessage: (UUID, Option[UUID]) => RequestChangeEmailSucceededMessage[J],
       activateNewEmailFailedMessage: (UUID, Option[UUID]) => ActivateNewEmailFailedMessage[J],
-      activateNewEmailSucceededMessage: (UUID, Option[UUID]) => ActivateNewEmailSucceededMessage[J]) =
+      activateNewEmailSucceededMessage: (UUID, Option[UUID]) => ActivateNewEmailSucceededMessage[J],
+      authenticationSuccessfulMessage: (UUID, Option[UUID]) => AuthenticationSuccessfulMessage[J]) =
     Props(
       new Authenticator(
         userTokenValidator,
@@ -298,5 +304,6 @@ object Authenticator {
         requestChangeEmailFailedMessage,
         requestChangeEmailSucceededMessage,
         activateNewEmailFailedMessage,
-        activateNewEmailSucceededMessage))
+        activateNewEmailSucceededMessage,
+        authenticationSuccessfulMessage))
 }

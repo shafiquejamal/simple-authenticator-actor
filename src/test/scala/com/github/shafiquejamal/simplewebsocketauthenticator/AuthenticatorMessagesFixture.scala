@@ -62,13 +62,13 @@ object AuthenticatorMessagesFixture {
   case class YourRegistrationAttemptFailedMessageImpl(
       override val iD: UUID, override val previousMessageID: Option[UUID])
     extends YourRegistrationAttemptFailedMessage[String] {
-    override def toJSON: String = s"YourRegistrationAttemptFailedMessageImpl_${iD.toString}"
+    override def toJSON: String = s"YourRegistrationAttemptFailedMessageImpl_${iD.toString}_${previousMessageID.get.toString}"
   }
 
   case class YourRegistrationAttemptSucceededMessageImpl(
       override val iD: UUID, override val previousMessageID: Option[UUID])
     extends YourRegistrationAttemptSucceededMessage[String] {
-    override def toJSON: String = s"YourRegistrationAttemptSucceededMessage_${iD.toString}"
+    override def toJSON: String = s"YourRegistrationAttemptSucceededMessage_${iD.toString}_${previousMessageID.get.toString}"
   }
 
   case class AccountActivationAttemptFailedMessageImpl(
@@ -76,60 +76,64 @@ object AuthenticatorMessagesFixture {
       override val previousMessageID: Option[UUID],
       override val errorMessage: String)
     extends AccountActivationAttemptFailedMessage[String] {
-    override def toJSON: String = s"AccountActivationAttemptFailedMessageImpl_${iD.toString}"
+    override def toJSON: String = s"AccountActivationAttemptFailedMessageImpl_${iD.toString}_${previousMessageID.get.toString}"
   }
 
   case class AccountActivationAttemptSucceededMessageImpl(
       override val iD: UUID,
       override val previousMessageID: Option[UUID])
     extends AccountActivationAttemptSucceededMessage[String] {
-    override def toJSON: String = s"AccountActivationAttemptSucceededMessageImpl_${iD.toString}"
+    override def toJSON: String = s"AccountActivationAttemptSucceededMessageImpl_${iD.toString}_${previousMessageID.get.toString}"
   }
 
   case class ResendActivationCodeResultMessageImpl(
       override val iD: UUID, override val previousMessageID: Option[UUID], override val message: String)
     extends ResendActivationCodeResultMessage[String] {
-    override def toJSON: String = s"ResendActivationCodeResultMessageImpl_${iD.toString}"
+    override def toJSON: String = s"ResendActivationCodeResultMessageImpl_${iD.toString}_${previousMessageID.get.toString}"
   }
 
   case class YouAreAlreadyAuthenticatedMessageImpl(override val iD: UUID, override val previousMessageID: Option[UUID])
     extends YouAreAlreadyAuthenticatedMessage[String] {
-    override def toJSON: String = s"YouAreAlreadyAuthenticatedMessageImpl_${iD.toString}"
+    override def toJSON: String = s"YouAreAlreadyAuthenticatedMessageImpl_${iD.toString}_${previousMessageID.get.toString}"
   }
 
   case class LoggingYouOutMessageImpl(override val iD: UUID, override val previousMessageID: Option[UUID])
     extends LoggingYouOutMessage[String] {
-    override def toJSON: String = s"LoggingYouOutMessageImpl_${iD.toString}"
+    override def toJSON: String = s"LoggingYouOutMessageImpl_${iD.toString}_${previousMessageID.get.toString}"
   }
 
   case class ChangePasswordFailedMessageImpl(override val iD: UUID, override val previousMessageID: Option[UUID])
     extends ChangePasswordFailedMessage[String] {
-    override def toJSON: String = s"ChangePasswordFailedMessageImpl_${iD.toString}"
+    override def toJSON: String = s"ChangePasswordFailedMessageImpl_${iD.toString}_${previousMessageID.get.toString}"
   }
 
   case class ChangePasswordSucceededMessageImpl(override val iD: UUID, override val previousMessageID: Option[UUID])
     extends ChangePasswordSucceededMessage[String] {
-    override def toJSON: String = s"ChangePasswordSucceededMessageImpl_${iD.toString}"
+    override def toJSON: String = s"ChangePasswordSucceededMessageImpl_${iD.toString}_${previousMessageID.get.toString}"
   }
 
   case class RequestChangeEmailFailedMessageImpl(override val iD: UUID, override val previousMessageID: Option[UUID])
     extends RequestChangeEmailFailedMessage[String] {
-    override def toJSON: String = s"RequestChangeEmailFailedMessageImpl_${iD.toString}"
+    override def toJSON: String = s"RequestChangeEmailFailedMessageImpl_${iD.toString}_${previousMessageID.get.toString}"
   }
 
   case class RequestChangeEmailSucceededMessageImpl(override val iD: UUID, override val previousMessageID: Option[UUID])
     extends RequestChangeEmailSucceededMessage[String] {
-    override def toJSON: String = s"RequestChangeEmailSucceededMessageImpl_${iD.toString}"
+    override def toJSON: String = s"RequestChangeEmailSucceededMessageImpl_${iD.toString}_${previousMessageID.get.toString}"
   }
 
   case class ActivateNewEmailFailedMessageImpl(override val iD: UUID, override val previousMessageID: Option[UUID])
     extends ActivateNewEmailFailedMessage[String] {
-    override def toJSON: String = s"ActivateNewEmailFailedMessageImpl_${iD.toString}"
+    override def toJSON: String = s"ActivateNewEmailFailedMessageImpl_${iD.toString}_${previousMessageID.get.toString}"
   }
 
   case class ActivateNewEmailSucceededMessageImpl(override val iD: UUID, override val previousMessageID: Option[UUID])
     extends ActivateNewEmailSucceededMessage[String] {
-    override def toJSON: String = s"ActivateNewEmailSucceededMessageImpl_${iD.toString}"
+    override def toJSON: String = s"ActivateNewEmailSucceededMessageImpl_${iD.toString}_${previousMessageID.get.toString}"
   }
 
+  case class AuthenticationSuccessfulMessageImpl(override  val iD: UUID, override val previousMessageID: Option[UUID])
+    extends AuthenticationSuccessfulMessage[String] {
+    override def toJSON: String = s"AuthenticationSuccessfulMessageImpl_${iD.toString}_${previousMessageID.get.toString}"
+  }
 }
