@@ -41,11 +41,12 @@ object AuthenticatorMessagesFixture {
   }
 
   case class EmailIsAvailableMessageImpl(
-      override val iD: UUID, override val previousMessageID: Option[UUID],
+      override val iD: UUID,
+      override val previousMessageID: Option[UUID],
       override val email: String,
       override val isEmailIsAvailable: Boolean)
     extends EmailIsAvailableMessage[String] {
-    override def toJSON: String = s"EmailIsAvailableMessageImpl_${iD.toString}"
+    override def toJSON: String = s"EmailIsAvailableMessageImpl_${iD.toString}_${previousMessageID.get.toString}_${email}_$isEmailIsAvailable"
   }
 
   case class UsernameIsAvailableMessageImpl(

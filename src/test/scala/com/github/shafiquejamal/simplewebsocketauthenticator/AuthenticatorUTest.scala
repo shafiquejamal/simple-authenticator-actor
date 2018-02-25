@@ -2,21 +2,37 @@ package com.github.shafiquejamal.simplewebsocketauthenticator
 
 import java.util.UUID
 
+import akka.actor.ActorSystem
+import akka.testkit.TestKit
 import com.github.shafiquejamal.accessapi.access.authentication.{AuthenticationAPI, JWTCreator, TokenValidator}
 import com.github.shafiquejamal.accessapi.access.registration.{AccountActivationCodeSender, RegistrationAPI, UserActivator}
 import com.github.shafiquejamal.accessapi.user.{UserAPI, UserDetails}
+import com.github.shafiquejamal.accessmessage.InBound.IsEmailAvailableMessage
 import com.github.shafiquejamal.accessmessage.OutBound.AccountActivationAttemptResultMessage
 import com.github.shafiquejamal.simplewebsocketauthenticator.AuthenticatorMessagesFixture._
 import com.github.shafiquejamal.util.id.TestUUIDProviderImpl
 import com.github.shafiquejamal.util.time.TestJavaInstantTimeProvider
 import org.scalamock.scalatest.MockFactory
-import org.scalatest.{FlatSpecLike, Matchers}
+import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 
-class AuthenticatorUTest extends FlatSpecLike with Matchers with MockFactory {
+class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
+  with Matchers
+  with MockFactory
+  with FlatSpecLike
+  with BeforeAndAfterAll {
+
+  override def afterAll {
+    TestKit.shutdownActorSystem(system)
+  }
 
   trait Fixture {
     val timeProvider = new TestJavaInstantTimeProvider()
     val uUIDProvider = new TestUUIDProviderImpl()
+    uUIDProvider.index = 200
+    val newMessageuUID = uUIDProvider.randomUUID()
+    uUIDProvider.index = 0
+    val originatingMessageUUID = uUIDProvider.randomUUID()
+    uUIDProvider.index = 200
   }
 
   trait MocksFixture {
@@ -30,17 +46,15 @@ class AuthenticatorUTest extends FlatSpecLike with Matchers with MockFactory {
     val passwordResetCodeRequestActions = mock[PasswordResetCodeRequestActions[String]]
     val accountActivationCodeCreator = mock[AccountActivationCodeCreator]
     val userActivator = mock[UserActivator[UserDetails[String], AccountActivationAttemptResultMessage[String]]]
-
     val clientPaths = new ClientPaths {
       override def namedClientPath(clientId: UUID): String = "namedClientPath"
 
       override def namedClientActorName(clientId: UUID, randomUUID: UUID): String = "namedClientActorName"
     }
-
     val messageRouterPropsCreator = mock[MessageRouterPropsCreator]
   }
 
-  trait MessagesFixture {
+  trait OutboundMessagesFixture {
     val logMeOutMessage = LogMeOutMessageImpl.apply _
     val yourLoginAttemptFailedMessage = YourLoginAttemptFailedMessageImpl.apply _
     val yourLoginAttemptSucceededMessage = YourLoginAttemptSucceededMessageImpl.apply _
@@ -64,47 +78,64 @@ class AuthenticatorUTest extends FlatSpecLike with Matchers with MockFactory {
     val activateNewEmailSucceededMessage = ActivateNewEmailSucceededMessageImpl.apply _
   }
 
-  "The authenticator" should "send back a message indicateding that an email address is available if it is available" in
-    new MocksFixture with MessagesFixture with Fixture {
+  trait AuthenticatorFixture extends OutboundMessagesFixture with MocksFixture with Fixture {
+    val authenticator = system.actorOf(Authenticator.props(
+      tokeValidator,
+      userAPI,
+      authenticationAPI,
+      registrationAPI,
+      jWTCreator,
+      timeProvider,
+      uUIDProvider,
+      testActor,
+      passwordResetCodeRequestActions,
+      accountActivationCodeSender,
+      logMeOutMessage,
+      yourLoginAttemptFailedMessage,
+      yourLoginAttemptSucceededMessage,
+      passwordResetCodeMessageSent,
+      passwordResetSuccessfulMessage,
+      passwordResetFailedMessage,
+      emailIsAvailableMessage,
+      usernameIsAvailableMessage,
+      yourRegistrationAttemptFailedMessage,
+      yourRegistrationAttemptSucceededMessage,
+      accountActivationAttemptFailedMessage,
+      accountActivationCodeCreator,
+      resendActivationCodeResultMessage,
+      userActivator,
+      youAreAlreadyAuthenticatedMessage,
+      loggingYouOutMessage,
+      clientPaths,
+      changePasswordFailedMessage,
+      changePasswordSucceededMessage,
+      messageRouterPropsCreator,
+      null,
+      requestChangeEmailFailedMessage,
+      requestChangeEmailSucceededMessage,
+      activateNewEmailFailedMessage,
+      activateNewEmailSucceededMessage
+    ))
+  }
 
-      val authenticator = Authenticator.props(
-        tokeValidator,
-        userAPI,
-        authenticationAPI,
-        registrationAPI,
-        jWTCreator,
-        timeProvider,
-        uUIDProvider,
-        null,
-        passwordResetCodeRequestActions,
-        accountActivationCodeSender,
-        logMeOutMessage,
-        yourLoginAttemptFailedMessage,
-        yourLoginAttemptSucceededMessage,
-        passwordResetCodeMessageSent,
-        passwordResetSuccessfulMessage,
-        passwordResetFailedMessage,
-        emailIsAvailableMessage,
-        usernameIsAvailableMessage,
-        yourRegistrationAttemptFailedMessage,
-        yourRegistrationAttemptSucceededMessage,
-        accountActivationAttemptFailedMessage,
-        accountActivationCodeCreator,
-        resendActivationCodeResultMessage,
-        userActivator,
-        youAreAlreadyAuthenticatedMessage,
-        loggingYouOutMessage,
-        clientPaths,
-        changePasswordFailedMessage,
-        changePasswordSucceededMessage,
-        messageRouterPropsCreator,
-        null,
-        requestChangeEmailFailedMessage,
-        requestChangeEmailSucceededMessage,
-        activateNewEmailFailedMessage,
-        activateNewEmailSucceededMessage
-      )
+  "The authenticator" should "send back a message indicating that an email address is available if it is available" in
+    new AuthenticatorFixture {
 
+      val emailToCheck = "some@email.com"
+      val isEmailAvailableMessage = new IsEmailAvailableMessage {
+        override def email: String = emailToCheck
+
+        override def iD: UUID = originatingMessageUUID
+      }
+
+      authenticator ! isEmailAvailableMessage
+      (registrationAPI.isEmailIsAvailable _).expects(emailToCheck).returning(true)
+      expectMsg(emailIsAvailableMessage(newMessageuUID, Some(originatingMessageUUID), emailToCheck, true).toJSON)
+      (registrationAPI.isEmailIsAvailable _).expects(emailToCheck).returning(false)
+
+      uUIDProvider.index = 200
+      authenticator ! isEmailAvailableMessage
+      expectMsg(emailIsAvailableMessage(newMessageuUID, Some(originatingMessageUUID), emailToCheck, false).toJSON)
     }
 
 
