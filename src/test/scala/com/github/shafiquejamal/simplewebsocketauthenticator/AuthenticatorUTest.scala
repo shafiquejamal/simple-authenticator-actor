@@ -7,7 +7,7 @@ import akka.testkit.TestKit
 import com.github.shafiquejamal.accessapi.access.authentication.{AuthenticationAPI, JWTCreator, TokenValidator}
 import com.github.shafiquejamal.accessapi.access.registration.{AccountActivationCodeSender, RegistrationAPI, UserActivator}
 import com.github.shafiquejamal.accessapi.user.{UserAPI, UserContact, UserDetails}
-import com.github.shafiquejamal.accessmessage.InBound.{AuthenticateMeMessage, IsEmailAvailableMessage, IsUsernameAvailableMessage}
+import com.github.shafiquejamal.accessmessage.InBound.{AuthenticateMeMessage, IsEmailAvailableMessage, IsUsernameAvailableMessage, LogMeInMessage}
 import com.github.shafiquejamal.accessmessage.OutBound.AccountActivationAttemptResultMessage
 import com.github.shafiquejamal.simplewebsocketauthenticator.AuthenticatorMessagesFixture._
 import com.github.shafiquejamal.util.id.TestUUIDProviderImpl
@@ -36,6 +36,14 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
     resetUUID()
     val newMessageUUID = uUIDProvider.randomUUID()
     val secondNewMessageUUID = uUIDProvider.randomUUID()
+    val emailAddress = "some@email.com"
+    val userContact = new UserContact {
+      override val userID: UUID = generalUUID
+      override val email: String = "some-email"
+      override val username: String = "some-username"
+    }
+    val aJWT = "some-JWT"
+
   }
 
   trait MocksFixture {
@@ -142,20 +150,17 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
 
   "The authenticator" should "send back a message indicating that an email address is available if it is available" in
   new AuthenticatorFixture {
-
-      val emailToCheck = "some@email.com"
       val isEmailAvailableMessage: IsEmailAvailableMessage = new IsEmailAvailableMessage {
-        override val email: String = emailToCheck
-
+        override val email: String = emailAddress
         override val iD: UUID = originatingMessageUUID
       }
 
       Seq(true, false).foreach { isEmailAvailability =>
         resetUUID()
-        (registrationAPI.isEmailIsAvailable _).expects(emailToCheck).returning(isEmailAvailability)
+        (registrationAPI.isEmailIsAvailable _).expects(emailAddress).returning(isEmailAvailability)
         authenticator ! isEmailAvailableMessage
         expectMsg(emailIsAvailableMessage(
-            newMessageUUID, Some(originatingMessageUUID), emailToCheck, isEmailAvailability).toJSON)
+            newMessageUUID, Some(originatingMessageUUID), emailAddress, isEmailAvailability).toJSON)
       }
 
    }
@@ -164,7 +169,6 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
     val usernameToCheck = "some-user-name"
     val isUsernameAvailableMessage: IsUsernameAvailableMessage = new IsUsernameAvailableMessage {
       override val username: String = usernameToCheck
-
       override val iD: UUID = originatingMessageUUID
     }
 
@@ -179,19 +183,9 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
 
   it should "switch the receive function to the authenticated receive function only if the user presents a valid JWT" in
   new AuthenticatorFixture {
-
-    val aJWT = "some-JWT"
     val authenticateMeMessage: AuthenticateMeMessage = new AuthenticateMeMessage {
-      override def jWT: String = aJWT
-
-      override def iD: UUID = originatingMessageUUID
-    }
-    val userContact = new UserContact {
-      override val userID: UUID = generalUUID
-
-      override val email: String = "some-email"
-
-      override val username: String = "some-username"
+      override val jWT: String = aJWT
+      override val iD: UUID = originatingMessageUUID
     }
 
     resetUUID()
@@ -203,6 +197,37 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
     (messageRouterPropsCreator.props _).expects(*, *, *, *, *).returning(DummyActor.props)
     authenticator ! authenticateMeMessage
     expectMsg(authenticationSuccessfulMessage(secondNewMessageUUID, Some(originatingMessageUUID)).toJSON)
+  }
+
+  it should "return a JWT if login credentials are correct, and error response otherwise" in new AuthenticatorFixture {
+    val aPassword = "a-password"
+    val logMeInMessage = new LogMeInMessage {
+      override val maybeEmail: Option[String] = Some(emailAddress)
+      override val maybeUsername: Option[String] = None
+      override val password: String = aPassword
+      override val iD: UUID = generalUUID
+    }
+
+    (authenticationAPI.user(_: Option[String], _: Option[String], _: String))
+      .expects(None, Some(emailAddress), aPassword).returning(None)
+    resetUUID()
+    authenticator ! logMeInMessage
+    expectMsg(yourLoginAttemptFailedMessage(newMessageUUID, Some(originatingMessageUUID)).toJSON)
+
+    val userDetails = new UserDetails[String] {
+      override val userID: UUID = userContact.userID
+      override val email: String = userContact.email
+      override val username: String = userContact.username
+      override val userStatus: String = "user"
+    }
+
+    (authenticationAPI.user(_: Option[String], _: Option[String], _: String))
+      .expects(None, Some(emailAddress), aPassword).returning(Some(userDetails))
+    (jWTCreator.create _).expects(userDetails, timeProvider.now()).returning(aJWT)
+    authenticator ! logMeInMessage
+    expectMsg(
+      yourLoginAttemptSucceededMessage(
+        newMessageUUID, Some(originatingMessageUUID), userContact.username, userContact.email, aJWT).toJSON)
   }
 
 }

@@ -61,11 +61,14 @@ class Authenticator[US, R, J] (
         userTokenValidator.blockToExecuteIfUnauthorized)
 
       maybeValidUser.fold {
-        unnamedClient ! loggingYouOutMessage(uUIDProvider.randomUUID(), Some(authenticateMeMessage.iD)).toJSON
+        val response = loggingYouOutMessage(uUIDProvider.randomUUID(), Some(authenticateMeMessage.iD))
+        unnamedClient ! response.toJSON
+        log.info("Authenticator", authenticateMeMessage, response)
       } { userContact =>
         createNamedClientAndRouter(userContact.userID, userContact.username, userContact.email)
-        unnamedClient ! authenticationSuccessfulMessage(
-            uUIDProvider.randomUUID(), Some(authenticateMeMessage.iD)).toJSON
+        val response = authenticationSuccessfulMessage(uUIDProvider.randomUUID(), Some(authenticateMeMessage.iD))
+        unnamedClient ! response.toJSON
+        log.info("Authenticator", authenticateMeMessage, response)
       }
 
     case logMeInMessage: LogMeInMessage =>
@@ -84,6 +87,7 @@ class Authenticator[US, R, J] (
       }
 
       unnamedClient ! response.toJSON
+      log.info("Authenticator", logMeInMessage, response)
 
     case passwordResetCodeRequestMessage: PasswordResetCodeRequestMessage =>
       val maybeUser = userAPI findByEmailLatest passwordResetCodeRequestMessage.email
