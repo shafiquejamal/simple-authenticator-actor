@@ -92,8 +92,9 @@ class Authenticator[US, R, J] (
     case passwordResetCodeRequestMessage: PasswordResetCodeRequestMessage =>
       val maybeUser = userAPI findByEmailLatest passwordResetCodeRequestMessage.email
       maybeUser.fold[Unit](){ userDetails => passwordResetCodeRequestActions sendUsing userDetails }
-      unnamedClient ! passwordResetCodeSentMessage(
-          uUIDProvider.randomUUID(), Some(passwordResetCodeRequestMessage.iD)).toJSON
+      val response = passwordResetCodeSentMessage(uUIDProvider.randomUUID(), Some(passwordResetCodeRequestMessage.iD))
+      unnamedClient ! response.toJSON
+      log.info("Authenticator", passwordResetCodeRequestMessage, response)
 
     case resetPasswordMessage: ResetMyPasswordMessage =>
       authenticationAPI
