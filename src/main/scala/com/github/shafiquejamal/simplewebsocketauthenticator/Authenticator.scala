@@ -97,16 +97,18 @@ class Authenticator[US, R, J] (
       log.info("Authenticator", passwordResetCodeRequestMessage, response)
 
     case resetPasswordMessage: ResetMyPasswordMessage =>
-      authenticationAPI
+      val response = authenticationAPI
         .resetPassword(
           resetPasswordMessage.email,
           resetPasswordMessage.code.replaceAll("-", ""),
           resetPasswordMessage.newPassword) match {
-        case Success(user) =>
-          unnamedClient ! passwordResetSuccessfulMessage(uUIDProvider.randomUUID(), Some(resetPasswordMessage.iD)).toJSON
+        case Success(userDetails) =>
+          passwordResetSuccessfulMessage(uUIDProvider.randomUUID(), Some(resetPasswordMessage.iD))
         case Failure(_) =>
-          unnamedClient ! passwordResetFailedMessage(uUIDProvider.randomUUID(), Some(resetPasswordMessage.iD)).toJSON
+          passwordResetFailedMessage(uUIDProvider.randomUUID(), Some(resetPasswordMessage.iD))
       }
+      unnamedClient ! response.toJSON
+      log.info("Authenticator", resetPasswordMessage, response)
 
     case isEmailAvailableMessage : IsEmailAvailableMessage =>
       val isEmailAvailable: Boolean = registrationAPI.isEmailIsAvailable(isEmailAvailableMessage.email)

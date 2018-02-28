@@ -15,6 +15,8 @@ import com.github.shafiquejamal.util.time.TestJavaInstantTimeProvider
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 
+import scala.util.{Failure, Success}
+
 class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
   with Matchers
   with MockFactory
@@ -245,5 +247,31 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
     (passwordResetCodeRequestActions.sendUsing _).expects(userDetails).returning(Unit)
     authenticator ! passwordResetCodeRequestMessage
     expectMsg(passwordResetCodeMessageSent(newMessageUUID, Some(originatingMessageUUID)).toJSON)
+  }
+
+  it should "reset a users password if the submitted code is correct" in new AuthenticatorFixture {
+    val aNewPassword = "newPassword"
+    val aCode = "a-code"
+    val resetPasswordMessage = new ResetMyPasswordMessage {
+      override def code: String = aCode
+
+      override def newPassword: String = aNewPassword
+
+      override def email: String = userDetails.email
+
+      override def iD: UUID = userDetails.userID
+    }
+
+    resetUUID()
+    (authenticationAPI.resetPassword _).expects(userDetails.email, aCode.replaceAll("-", ""), aNewPassword)
+      .returning(Failure(new Exception("failure")))
+    authenticator ! resetPasswordMessage
+    expectMsg(passwordResetFailedMessage(newMessageUUID, Some(originatingMessageUUID)).toJSON)
+
+    resetUUID()
+    (authenticationAPI.resetPassword _).expects(userDetails.email, aCode.replaceAll("-", ""), aNewPassword)
+      .returning(Success(userDetails))
+    authenticator ! resetPasswordMessage
+    expectMsg(passwordResetSuccessfulMessage(newMessageUUID, Some(originatingMessageUUID)).toJSON)
   }
 }
