@@ -7,7 +7,7 @@ import akka.testkit.TestKit
 import com.github.shafiquejamal.accessapi.access.authentication.{AuthenticationAPI, JWTCreator, TokenValidator}
 import com.github.shafiquejamal.accessapi.access.registration.{AccountActivationCodeSender, RegistrationAPI, UserActivator}
 import com.github.shafiquejamal.accessapi.user.{UserAPI, UserContact, UserDetails}
-import com.github.shafiquejamal.accessmessage.InBound.{AuthenticateMeMessage, IsEmailAvailableMessage, IsUsernameAvailableMessage, LogMeInMessage}
+import com.github.shafiquejamal.accessmessage.InBound._
 import com.github.shafiquejamal.accessmessage.OutBound.AccountActivationAttemptResultMessage
 import com.github.shafiquejamal.simplewebsocketauthenticator.AuthenticatorMessagesFixture._
 import com.github.shafiquejamal.util.id.TestUUIDProviderImpl
@@ -43,6 +43,12 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
       override val username: String = "some-username"
     }
     val aJWT = "some-JWT"
+    val userDetails = new UserDetails[String] {
+      override val userID: UUID = userContact.userID
+      override val email: String = userContact.email
+      override val username: String = userContact.username
+      override val userStatus: String = "user"
+    }
 
   }
 
@@ -214,13 +220,6 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
     authenticator ! logMeInMessage
     expectMsg(yourLoginAttemptFailedMessage(newMessageUUID, Some(originatingMessageUUID)).toJSON)
 
-    val userDetails = new UserDetails[String] {
-      override val userID: UUID = userContact.userID
-      override val email: String = userContact.email
-      override val username: String = userContact.username
-      override val userStatus: String = "user"
-    }
-
     (authenticationAPI.user(_: Option[String], _: Option[String], _: String))
       .expects(None, Some(emailAddress), aPassword).returning(Some(userDetails))
     (jWTCreator.create _).expects(userDetails, timeProvider.now()).returning(aJWT)
@@ -230,4 +229,21 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
         newMessageUUID, Some(originatingMessageUUID), userContact.username, userContact.email, aJWT).toJSON)
   }
 
+  it should "send a password reset code if requested for a user's email that exists" in new AuthenticatorFixture {
+
+    (userAPI.findByEmailLatest _).expects(emailAddress).returning(None)
+    val passwordResetCodeRequestMessage = new PasswordResetCodeRequestMessage {
+      override def email: String = emailAddress
+      override def iD: UUID = userContact.userID
+    }
+    resetUUID()
+    authenticator ! passwordResetCodeRequestMessage
+    expectMsg(passwordResetCodeMessageSent(newMessageUUID, Some(originatingMessageUUID)).toJSON)
+
+    resetUUID()
+    (userAPI.findByEmailLatest _).expects(emailAddress).returning(Some(userDetails))
+    (passwordResetCodeRequestActions.sendUsing _).expects(userDetails).returning(Unit)
+    authenticator ! passwordResetCodeRequestMessage
+    expectMsg(passwordResetCodeMessageSent(newMessageUUID, Some(originatingMessageUUID)).toJSON)
+  }
 }

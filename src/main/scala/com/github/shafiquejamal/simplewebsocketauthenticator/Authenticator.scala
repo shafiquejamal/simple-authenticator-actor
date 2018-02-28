@@ -109,13 +109,17 @@ class Authenticator[US, R, J] (
 
     case isEmailAvailableMessage : IsEmailAvailableMessage =>
       val isEmailAvailable: Boolean = registrationAPI.isEmailIsAvailable(isEmailAvailableMessage.email)
-      unnamedClient ! emailIsAvailableMessage(
-          uUIDProvider.randomUUID(), Some(isEmailAvailableMessage.iD), isEmailAvailableMessage.email, isEmailAvailable).toJSON
+      val response = emailIsAvailableMessage(
+        uUIDProvider.randomUUID(), Some(isEmailAvailableMessage.iD), isEmailAvailableMessage.email, isEmailAvailable)
+      unnamedClient ! response.toJSON
+      log.info("Authenticator", isEmailAvailableMessage, response)
 
     case isUsernameAvailableMessage: IsUsernameAvailableMessage =>
       val isUsernameAvailable: Boolean = registrationAPI.isUsernameIsAvailable(isUsernameAvailableMessage.username)
-      unnamedClient ! usernameIsAvailableMessage(
-          uUIDProvider.randomUUID(), Some(isUsernameAvailableMessage.iD), isUsernameAvailableMessage.username, isUsernameAvailable).toJSON
+      val response = usernameIsAvailableMessage(
+        uUIDProvider.randomUUID(), Some(isUsernameAvailableMessage.iD), isUsernameAvailableMessage.username, isUsernameAvailable)
+      unnamedClient ! response.toJSON
+      log.info("Authenticator", isUsernameAvailableMessage, response)
 
     case registerMeMessage: RegisterMeMessage =>
       val maybeUserDetails =
