@@ -53,7 +53,7 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
       override val username: String = userContact.username
       override val userStatus: String = "user"
     }
-
+    val activationCode = "anActivationCode"
   }
 
   trait MocksFixture {
@@ -282,7 +282,6 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
       override val email = userDetails.email
       override val password = aPassword
     }
-    val activationCode = "anActivationCode"
     val statusOnRegistration = "aStatusOnRegistration"
     
     resetUUID()
@@ -298,5 +297,32 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
     (registrationAPI.signUp _).expects(registerMeMessage.maybeUsername, registerMeMessage.email, registerMeMessage.password, statusOnRegistration).returning(Failure(new Exception("--")))
     authenticator ! registerMeMessage
     expectMsg(yourRegistrationAttemptFailedMessage(newMessageUUID, Some(originatingMessageUUID)).toJSON)
+  }
+  
+  it should "activate a user's acccount if the correct activation code is given" in new AuthenticatorFixture {
+    val activateMyAccountMessage = new ActivateMyAccountMessage {
+      override val code: String = activationCode
+      override val emailOrUsername: String = userDetails.email
+      override val iD: UUID = originatingMessageUUID
+    }
+    
+    resetUUID()
+    (userAPI.findByEmailLatest _).expects(activateMyAccountMessage.emailOrUsername).returning(None)
+    authenticator ! activateMyAccountMessage
+    expectMsg(accountActivationAttemptFailedMessage(newMessageUUID, Some(originatingMessageUUID), "User does not exist").toJSON)
+  
+    resetUUID()
+    (userAPI.findByEmailLatest _).expects(activateMyAccountMessage.emailOrUsername).returning(Some(userDetails))
+    (accountActivationCodeCreator.isMatch _).expects(userDetails.userID.toString, activationCode).returning(false)
+    authenticator ! activateMyAccountMessage
+    expectMsg(accountActivationAttemptFailedMessage(newMessageUUID, Some(originatingMessageUUID), "Incorrect code").toJSON)
+  
+    resetUUID()
+    (userAPI.findByEmailLatest _).expects(activateMyAccountMessage.emailOrUsername).returning(Some(userDetails))
+    (accountActivationCodeCreator.isMatch _).expects(userDetails.userID.toString, activationCode).returning(true)
+    val successMessage = accountActivationAttemptSucceededMessage(newMessageUUID, Some(originatingMessageUUID))
+    (userActivator.activateUser _).expects(userDetails, activationCode).returning(successMessage)
+    authenticator ! activateMyAccountMessage
+    expectMsg(successMessage.toJSON)
   }
 }
