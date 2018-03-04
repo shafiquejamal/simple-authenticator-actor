@@ -174,13 +174,19 @@ class Authenticator[US, R, J] (
   def processAuthenticatedRequests(clientUserID: UUID, email: String, messageRouter: ActorRef): Receive = {
 
     case m: AuthenticateMeMessage  =>
-      unnamedClient ! youAreAlreadyAuthenticatedMessage(uUIDProvider.randomUUID(), Some(m.iD)).toJSON
-
+      val response = youAreAlreadyAuthenticatedMessage(uUIDProvider.randomUUID(), Some(m.iD))
+      unnamedClient ! response.toJSON
+      log.info("Authenticator", m, response)
+      
     case m: LogMeInMessage =>
-      unnamedClient ! youAreAlreadyAuthenticatedMessage(uUIDProvider.randomUUID(), Some(m.iD)).toJSON
+      val response = youAreAlreadyAuthenticatedMessage(uUIDProvider.randomUUID(), Some(m.iD))
+      unnamedClient ! response.toJSON
+      log.info("Authenticator", m, response)
 
     case m: LogMeOutMessage =>
-      unnamedClient ! loggingYouOutMessage(uUIDProvider.randomUUID(), Some(m.iD)).toJSON
+      val response = loggingYouOutMessage(uUIDProvider.randomUUID(), Some(m.iD))
+      unnamedClient ! response.toJSON
+      log.info("Authenticator", m, response)
       context.unbecome()
 
     case m: LogMeOutOfAllDevicesMessage =>

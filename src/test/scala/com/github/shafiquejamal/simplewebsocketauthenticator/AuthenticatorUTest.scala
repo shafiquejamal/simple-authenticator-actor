@@ -177,11 +177,7 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
   
   }
   
-  trait InBoundMessages {
-  
-  }
-
-  "The authenticator" should "send back a message indicating that an email address is available if it is available" in
+  "For unauthenticated users, the authenticator" should "send back a message indicating that an email address is available if it is available" in
   new AuthenticatorFixture {
       val isEmailAvailableMessage: IsEmailAvailableMessage = new IsEmailAvailableMessage {
         override val email: String = emailAddress
@@ -353,21 +349,26 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
   }
   
   "For authenticated users, the authenticator" should "indicate that the user is already logged in if the user" +
-  " attempts authenticate" in new AuthenticatorFixture {
+  " attempts to authenticate" in new AuthenticatorFixture {
     authenticateUser()
     resetUUID()
     authenticator ! authenticateMeMessage
     expectMsg(youAreAlreadyAuthenticatedMessage(newMessageUUID, Some(originatingMessageUUID)).toJSON)
   }
   
-  it should "indicate that the user is already logged in if the user attempts log in" in new AuthenticatorFixture {
+  it should "indicate that the user is already logged in if the user attempts to log in" in new AuthenticatorFixture {
     authenticateUser()
     resetUUID()
     authenticator ! logMeInMessage
     expectMsg(youAreAlreadyAuthenticatedMessage(newMessageUUID, Some(generalUUID)).toJSON)
   }
   
-  it should "log the user out when requested" in new AuthenticatorFixture {
-  
+  it should "log the user out of the current device when requested" in new AuthenticatorFixture {
+    authenticateUser()
+    resetUUID()
+    val logMeOutMessageImpl = logMeOutMessage(originatingMessageUUID, None)
+    authenticator ! logMeOutMessageImpl
+    expectMsg(loggingYouOutMessage(newMessageUUID, Some(originatingMessageUUID)).toJSON)
   }
+  
 }
