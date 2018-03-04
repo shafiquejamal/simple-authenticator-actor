@@ -32,6 +32,7 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
     val uUIDProvider = new TestUUIDProviderImpl()
 
     def resetUUID(n: Int = 200): Unit = uUIDProvider.index = n
+    
     uUIDProvider.index = 0
     val originatingMessageUUID = uUIDProvider.randomUUID()
     val generalUUID = uUIDProvider.randomUUID()
@@ -39,6 +40,7 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
     val newMessageUUID = uUIDProvider.randomUUID()
     val secondNewMessageUUID = uUIDProvider.randomUUID()
     val emailAddress = "some@email.com"
+    val aPassword = "a-password"
     val userContact = new UserContact {
       override val userID: UUID = generalUUID
       override val email: String = "some-email"
@@ -170,8 +172,7 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
         expectMsg(emailIsAvailableMessage(
             newMessageUUID, Some(originatingMessageUUID), emailAddress, isEmailAvailability).toJSON)
       }
-
-   }
+  }
 
   it should "indicate whether a username is available" in new AuthenticatorFixture {
     val usernameToCheck = "some-user-name"
@@ -208,7 +209,6 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
   }
 
   it should "return a JWT if login credentials are correct, and error response otherwise" in new AuthenticatorFixture {
-    val aPassword = "a-password"
     val logMeInMessage = new LogMeInMessage {
       override val maybeEmail: Option[String] = Some(emailAddress)
       override val maybeUsername: Option[String] = None
@@ -273,5 +273,30 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
       .returning(Success(userDetails))
     authenticator ! resetPasswordMessage
     expectMsg(passwordResetSuccessfulMessage(newMessageUUID, Some(originatingMessageUUID)).toJSON)
+  }
+  
+  it should "process a user's authentication request" in new AuthenticatorFixture {
+    val registerMeMessage = new RegisterMeMessage {
+      override val iD = originatingMessageUUID
+      override val maybeUsername = Some(userDetails.username)
+      override val email = userDetails.email
+      override val password = aPassword
+    }
+    val activationCode = "anActivationCode"
+    val statusOnRegistration = "aStatusOnRegistration"
+    
+    resetUUID()
+    (accountActivationCodeSender.statusOnRegistration _).expects().returning(statusOnRegistration)
+    (accountActivationCodeCreator.generate _).expects(userDetails.userID.toString).returning(activationCode)
+    (accountActivationCodeSender.sendActivationCode _).expects(userDetails.username, userDetails.email, activationCode)
+    (registrationAPI.signUp _).expects(registerMeMessage.maybeUsername, registerMeMessage.email, registerMeMessage.password, statusOnRegistration).returning(Success(userDetails))
+    authenticator ! registerMeMessage
+    expectMsg(yourRegistrationAttemptSucceededMessage(newMessageUUID, Some(originatingMessageUUID)).toJSON)
+    
+    resetUUID()
+    (accountActivationCodeSender.statusOnRegistration _).expects().returning(statusOnRegistration)
+    (registrationAPI.signUp _).expects(registerMeMessage.maybeUsername, registerMeMessage.email, registerMeMessage.password, statusOnRegistration).returning(Failure(new Exception("--")))
+    authenticator ! registerMeMessage
+    expectMsg(yourRegistrationAttemptFailedMessage(newMessageUUID, Some(originatingMessageUUID)).toJSON)
   }
 }
