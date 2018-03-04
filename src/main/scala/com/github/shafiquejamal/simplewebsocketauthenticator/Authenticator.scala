@@ -190,7 +190,7 @@ class Authenticator[US, R, J] (
 
     case changePasswordMessage: ChangeMyPasswordMessage =>
       val maybeUser = authenticationAPI.user(clientUserID, changePasswordMessage.currentPassword)
-      val maybeUserDetails = maybeUser.flatMap { userDetails =>
+      val maybeUserDetails = maybeUser.flatMap { _ =>
         userAPI.changePassword(clientUserID, changePasswordMessage.newPassword).toOption
       }
 

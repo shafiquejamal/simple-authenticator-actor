@@ -54,6 +54,10 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
       override val userStatus: String = "user"
     }
     val activationCode = "anActivationCode"
+    val authenticateMeMessage: AuthenticateMeMessage = new AuthenticateMeMessage {
+      override val jWT: String = aJWT
+      override val iD: UUID = originatingMessageUUID
+    }
   }
 
   trait MocksFixture {
@@ -156,6 +160,13 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
       activateNewEmailFailedMessage,
       activateNewEmailSucceededMessage,
       authenticationSuccessfulMessage))
+  
+    def authenticateUser() {
+      tokenValidator.result = Some(userContact)
+      (messageRouterPropsCreator.props _).expects(*, *, *, *, *).returning(DummyActor.props)
+      authenticator ! authenticateMeMessage
+    }
+  
   }
 
   "The authenticator" should "send back a message indicating that an email address is available if it is available" in
@@ -192,19 +203,12 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
 
   it should "switch the receive function to the authenticated receive function only if the user presents a valid JWT" in
   new AuthenticatorFixture {
-    val authenticateMeMessage: AuthenticateMeMessage = new AuthenticateMeMessage {
-      override val jWT: String = aJWT
-      override val iD: UUID = originatingMessageUUID
-    }
-
     resetUUID()
     authenticator ! authenticateMeMessage
     expectMsg(loggingYouOutMessage(newMessageUUID, Some(originatingMessageUUID)).toJSON)
 
     resetUUID()
-    tokenValidator.result = Some(userContact)
-    (messageRouterPropsCreator.props _).expects(*, *, *, *, *).returning(DummyActor.props)
-    authenticator ! authenticateMeMessage
+    authenticateUser()
     expectMsg(authenticationSuccessfulMessage(secondNewMessageUUID, Some(originatingMessageUUID)).toJSON)
   }
 
