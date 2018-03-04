@@ -275,7 +275,7 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
     expectMsg(passwordResetSuccessfulMessage(newMessageUUID, Some(originatingMessageUUID)).toJSON)
   }
   
-  it should "process a user's authentication request" in new AuthenticatorFixture {
+  it should "process a user's registration request" in new AuthenticatorFixture {
     val registerMeMessage = new RegisterMeMessage {
       override val iD = originatingMessageUUID
       override val maybeUsername = Some(userDetails.username)
@@ -299,7 +299,7 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
     expectMsg(yourRegistrationAttemptFailedMessage(newMessageUUID, Some(originatingMessageUUID)).toJSON)
   }
   
-  it should "activate a user's acccount if the correct activation code is given" in new AuthenticatorFixture {
+  it should "activate a user's account if the correct activation code is given" in new AuthenticatorFixture {
     val activateMyAccountMessage = new ActivateMyAccountMessage {
       override val code: String = activationCode
       override val emailOrUsername: String = userDetails.email
@@ -324,5 +324,24 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
     (userActivator.activateUser _).expects(userDetails, activationCode).returning(successMessage)
     authenticator ! activateMyAccountMessage
     expectMsg(successMessage.toJSON)
+  }
+  
+  it should "resend an activation code for users that have registered but whose account has not been activated" in new AuthenticatorFixture {
+    val resendMyActivationCodeMessage = new ResendMyActivationCodeMessage {
+      override val email: String = userDetails.email
+      override val iD: UUID = originatingMessageUUID
+    }
+    
+    resetUUID()
+    (userAPI.findUnverifiedUser _).expects(resendMyActivationCodeMessage.email).returning(None)
+    authenticator ! resendMyActivationCodeMessage
+    expectMsg(resendActivationCodeResultMessage(newMessageUUID, Some(originatingMessageUUID), "User not registered or already verified").toJSON)
+  
+    resetUUID()
+    (userAPI.findUnverifiedUser _).expects(resendMyActivationCodeMessage.email).returning(Some(userDetails))
+    (accountActivationCodeCreator.generate _).expects(userDetails.userID.toString).returning(activationCode)
+    (accountActivationCodeSender.sendActivationCode _).expects(userDetails.username, userDetails.email, activationCode)
+    authenticator ! resendMyActivationCodeMessage
+    expectMsg(resendActivationCodeResultMessage(newMessageUUID, Some(originatingMessageUUID), "Code sent").toJSON)
   }
 }
