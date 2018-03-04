@@ -162,10 +162,16 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
       authenticationSuccessfulMessage))
   
     def authenticateUser() {
+      resetUUID()
       tokenValidator.result = Some(userContact)
-      (messageRouterPropsCreator.props _).expects(*, *, *, *, *).returning(DummyActor.props)
+      (messageRouterPropsCreator.props _).expects(*, *, *, *, *).returning(DummyActor.props).anyNumberOfTimes()
       authenticator ! authenticateMeMessage
+      expectMsg(authenticationSuccessfulMessage(secondNewMessageUUID, Some(originatingMessageUUID)).toJSON)
     }
+  
+  }
+  
+  trait InBoundMessages {
   
   }
 
@@ -207,9 +213,7 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
     authenticator ! authenticateMeMessage
     expectMsg(loggingYouOutMessage(newMessageUUID, Some(originatingMessageUUID)).toJSON)
 
-    resetUUID()
     authenticateUser()
-    expectMsg(authenticationSuccessfulMessage(secondNewMessageUUID, Some(originatingMessageUUID)).toJSON)
   }
 
   it should "return a JWT if login credentials are correct, and error response otherwise" in new AuthenticatorFixture {
@@ -347,5 +351,17 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
     (accountActivationCodeSender.sendActivationCode _).expects(userDetails.username, userDetails.email, activationCode)
     authenticator ! resendMyActivationCodeMessage
     expectMsg(resendActivationCodeResultMessage(newMessageUUID, Some(originatingMessageUUID), "Code sent").toJSON)
+  }
+  
+  "For authenticated users, the authenticator" should "indicate that the user is already logged in if the user" +
+  " attempts to log in or authenticate" in new AuthenticatorFixture {
+  
+    authenticateUser()
+    resetUUID()
+    authenticator ! authenticateMeMessage
+    expectMsg(youAreAlreadyAuthenticatedMessage(newMessageUUID, Some(originatingMessageUUID)).toJSON)
+
+    resetUUID()
+  
   }
 }
