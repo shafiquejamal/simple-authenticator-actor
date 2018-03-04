@@ -58,6 +58,12 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
       override val jWT: String = aJWT
       override val iD: UUID = originatingMessageUUID
     }
+    val logMeInMessage = new LogMeInMessage {
+      override val maybeEmail: Option[String] = Some(emailAddress)
+      override val maybeUsername: Option[String] = None
+      override val password: String = aPassword
+      override val iD: UUID = generalUUID
+    }
   }
 
   trait MocksFixture {
@@ -217,13 +223,6 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
   }
 
   it should "return a JWT if login credentials are correct, and error response otherwise" in new AuthenticatorFixture {
-    val logMeInMessage = new LogMeInMessage {
-      override val maybeEmail: Option[String] = Some(emailAddress)
-      override val maybeUsername: Option[String] = None
-      override val password: String = aPassword
-      override val iD: UUID = generalUUID
-    }
-
     (authenticationAPI.user(_: Option[String], _: Option[String], _: String))
       .expects(None, Some(emailAddress), aPassword).returning(None)
     resetUUID()
@@ -354,14 +353,21 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
   }
   
   "For authenticated users, the authenticator" should "indicate that the user is already logged in if the user" +
-  " attempts to log in or authenticate" in new AuthenticatorFixture {
-  
+  " attempts authenticate" in new AuthenticatorFixture {
     authenticateUser()
     resetUUID()
     authenticator ! authenticateMeMessage
     expectMsg(youAreAlreadyAuthenticatedMessage(newMessageUUID, Some(originatingMessageUUID)).toJSON)
-
+  }
+  
+  it should "indicate that the user is already logged in if the user attempts log in" in new AuthenticatorFixture {
+    authenticateUser()
     resetUUID()
+    authenticator ! logMeInMessage
+    expectMsg(youAreAlreadyAuthenticatedMessage(newMessageUUID, Some(generalUUID)).toJSON)
+  }
+  
+  it should "log the user out when requested" in new AuthenticatorFixture {
   
   }
 }
