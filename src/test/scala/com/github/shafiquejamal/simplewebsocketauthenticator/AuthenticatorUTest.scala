@@ -371,4 +371,15 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
     expectMsg(loggingYouOutMessage(newMessageUUID, Some(originatingMessageUUID)).toJSON)
   }
   
+  it should "log the user out of all devices when requested" in new AuthenticatorFixture {
+    // TODO: Need to finish this, could not get it working.
+    authenticateUser()
+    resetUUID()
+    val logMeOutOfAllDevices = new LogMeOutOfAllDevicesMessage {
+      override val iD: UUID = originatingMessageUUID
+    }
+    authenticator ! logMeOutOfAllDevices
+  }
+  
+  
 }
