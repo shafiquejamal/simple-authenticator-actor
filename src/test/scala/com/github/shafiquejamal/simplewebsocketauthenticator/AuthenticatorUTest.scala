@@ -66,10 +66,12 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
       override val iD: UUID = generalUUID
     }
     val changeMyPasswordMessage = new ChangeMyPasswordMessage {
-      override def newPassword: String = aNewPassword
-    
-      override def currentPassword: String = aPassword
-    
+      override val newPassword: String = aNewPassword
+      override val currentPassword: String = aPassword
+      override val iD: UUID = originatingMessageUUID
+    }
+    val requestChangeEmailMessage = new RequestChangeEmailMessage {
+      override val newEmail: String = "some-new-email-address"
       override def iD: UUID = originatingMessageUUID
     }
   }
@@ -344,15 +346,13 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
     resetUUID()
     (userAPI.findByEmailLatest _).expects(activateMyAccountMessage.emailOrUsername).returning(None)
     authenticator ! activateMyAccountMessage
-    expectMsg(accountActivationAttemptFailedMessage(newMessageUUID, Some(originatingMessageUUID), "User does not exist")
-              .toJSON)
+    expectMsg(accountActivationAttemptFailedMessage(newMessageUUID, Some(originatingMessageUUID), "User does not exist").toJSON)
   
     resetUUID()
     (userAPI.findByEmailLatest _).expects(activateMyAccountMessage.emailOrUsername).returning(Some(userDetails))
     (accountActivationCodeCreator.isMatch _).expects(userDetails.userID.toString, activationCode).returning(false)
     authenticator ! activateMyAccountMessage
-    expectMsg(accountActivationAttemptFailedMessage(newMessageUUID, Some(originatingMessageUUID), "Incorrect code")
-              .toJSON)
+    expectMsg(accountActivationAttemptFailedMessage(newMessageUUID, Some(originatingMessageUUID), "Incorrect code").toJSON)
   
     resetUUID()
     (userAPI.findByEmailLatest _).expects(activateMyAccountMessage.emailOrUsername).returning(Some(userDetails))
@@ -450,6 +450,22 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
     (userAPI.changePassword _).expects(userDetails.userID, changeMyPasswordMessage.newPassword).returning(Success(userDetails))
     authenticator ! changeMyPasswordMessage
     expectMsg(changePasswordSucceededMessage(newMessageUUID, Some(originatingMessageUUID)).toJSON)
+  }
+  
+  it should "handle the request to change user's email address - unsuccessful case" in new AuthenticatorFixture {
+    authenticateUser()
+    resetUUID()
+    (userAPI.requestChangeEmail _).expects(userDetails.userID, requestChangeEmailMessage.newEmail).returning(Failure(new Exception("")))
+    authenticator ! requestChangeEmailMessage
+    expectMsg(requestChangeEmailFailedMessage(newMessageUUID, Some(originatingMessageUUID)).toJSON)
+  }
+  
+  it should "handle the request to change user's email address - successful case" in new AuthenticatorFixture {
+    authenticateUser()
+    resetUUID()
+    (userAPI.requestChangeEmail _).expects(userDetails.userID, requestChangeEmailMessage.newEmail).returning(Success(userDetails))
+    authenticator ! requestChangeEmailMessage
+    expectMsg(requestChangeEmailSucceededMessage(newMessageUUID, Some(originatingMessageUUID)).toJSON)
   }
   
 }
