@@ -70,9 +70,15 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
       override val currentPassword: String = aPassword
       override val iD: UUID = originatingMessageUUID
     }
+    val aNewEmail = "some-new-email-address"
     val requestChangeEmailMessage = new RequestChangeEmailMessage {
-      override val newEmail: String = "some-new-email-address"
+      override val newEmail: String = aNewEmail
       override def iD: UUID = originatingMessageUUID
+    }
+    val activateNewEmailMessage = new ActivateNewEmailMessage {
+      override val code: String = activationCode
+      override val newEmail: String = aNewEmail
+      override val iD: UUID = originatingMessageUUID
     }
   }
   
@@ -468,4 +474,21 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
     expectMsg(requestChangeEmailSucceededMessage(newMessageUUID, Some(originatingMessageUUID)).toJSON)
   }
   
+  it should "fail to activate the new email if the code is incorrect" in new AuthenticatorFixture {
+    authenticateUser()
+    resetUUID()
+    (userAPI.activateNewEmail _).expects(
+        userDetails.userID, userDetails.email, activateNewEmailMessage.newEmail, activateNewEmailMessage.code).returning(Failure(new Exception("")))
+    authenticator ! activateNewEmailMessage
+    expectMsg(activateNewEmailFailedMessage(newMessageUUID, Some(originatingMessageUUID)).toJSON)
+  }
+  
+  it should "activate the new email if the code is correct" in new AuthenticatorFixture {
+    authenticateUser()
+    resetUUID()
+    (userAPI.activateNewEmail _).expects(
+        userDetails.userID, userDetails.email, activateNewEmailMessage.newEmail, activateNewEmailMessage.code).returning(Success(userDetails))
+    authenticator ! activateNewEmailMessage
+    expectMsg(activateNewEmailSucceededMessage(newMessageUUID, Some(originatingMessageUUID)).toJSON)
+  }
 }
