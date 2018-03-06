@@ -13,7 +13,7 @@ import com.github.shafiquejamal.util.time.JavaInstantTimeProvider
 
 import scala.util.{Failure, Success}
 
-class Authenticator[US, R, J] (
+class Authenticator[US, J] (
     userTokenValidator: TokenValidator,
     userAPI: UserAPI[UserDetails[US]],
     authenticationAPI: AuthenticationAPI[UserDetails[US]],
@@ -230,7 +230,6 @@ class Authenticator[US, R, J] (
 
     case msg =>
       messageRouter ! msg
-
   }
 
   private def createNamedClientAndRouter(clientId: UUID, clientUsername: String, email: String): Unit = {
