@@ -247,7 +247,7 @@ class Authenticator[US, J] (
 
 object Authenticator {
 
-  def props[US, R, J](
+  def props[US, J](
       userTokenValidator: TokenValidator,
       userAPI: UserAPI[UserDetails[US]],
       authenticationAPI: AuthenticationAPI[UserDetails[US]],
