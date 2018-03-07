@@ -13,17 +13,17 @@ import com.github.shafiquejamal.util.time.JavaInstantTimeProvider
 
 import scala.util.{Failure, Success}
 
-class Authenticator[US, J] (
+class Authenticator[US, UD <: UserDetails[US], J] (
     userTokenValidator: TokenValidator,
-    userAPI: UserAPI[UserDetails[US]],
-    authenticationAPI: AuthenticationAPI[UserDetails[US]],
-    registrationAPI: RegistrationAPI[UserDetails[US], US],
-    jWTCreator: JWTCreator[UserDetails[US]],
+    userAPI: UserAPI[UD],
+    authenticationAPI: AuthenticationAPI[UD],
+    registrationAPI: RegistrationAPI[UD, US],
+    jWTCreator: JWTCreator[UD],
     timeProvider: JavaInstantTimeProvider,
     uUIDProvider: UUIDProvider,
     unnamedClient: ActorRef,
     passwordResetCodeRequestActions: PasswordResetCodeRequestActions[US],
-    accountActivationCodeSender:AccountActivationCodeSender[UserDetails[US], US],
+    accountActivationCodeSender:AccountActivationCodeSender[UD, US],
     logMeOutMessage: (UUID, Option[UUID]) => LogMeOutMessage,
     yourLoginAttemptFailedMessage: (UUID, Option[UUID]) => YourLoginAttemptFailedMessage[J],
     yourLoginAttemptSucceededMessage: (UUID, Option[UUID], String, String, String) => YourLoginAttemptSucceededMessage[J],
@@ -37,7 +37,7 @@ class Authenticator[US, J] (
     accountActivationAttemptFailedMessage: (UUID, Option[UUID], String) => AccountActivationAttemptFailedMessage[J],
     accountActivationCodeCreator: AccountActivationCodeCreator,
     resendActivationCodeResultMessage: (UUID, Option[UUID], String) => ResendActivationCodeResultMessage[J],
-    userActivator: UserActivator[UserDetails[US], AccountActivationAttemptResultMessage[J]],
+    userActivator: UserActivator[UD, AccountActivationAttemptResultMessage[J]],
     youAreAlreadyAuthenticatedMessage: (UUID, Option[UUID]) => YouAreAlreadyAuthenticatedMessage[J],
     loggingYouOutMessage: (UUID, Option[UUID]) => LoggingYouOutMessage[J],
     clientPaths: ClientPaths,
@@ -145,7 +145,7 @@ class Authenticator[US, J] (
       val response = userAPI.findByEmailLatest(email).fold[AccountActivationAttemptResultMessage[J]](
         accountActivationAttemptFailedMessage(uUIDProvider.randomUUID(), Some(activateMyAccountMessage.iD),
           "User does not exist")
-      ) { user: UserDetails[US] =>
+      ) { user: UD =>
         if (accountActivationCodeCreator.isMatch(user.userID.toString, code)) {
           userActivator.activateUser(user, code)
         } else {
@@ -247,17 +247,17 @@ class Authenticator[US, J] (
 
 object Authenticator {
 
-  def props[US, J](
+  def props[US, UD <: UserDetails[US], J](
       userTokenValidator: TokenValidator,
-      userAPI: UserAPI[UserDetails[US]],
-      authenticationAPI: AuthenticationAPI[UserDetails[US]],
-      registrationAPI: RegistrationAPI[UserDetails[US], US],
-      jWTCreator: JWTCreator[UserDetails[US]],
+      userAPI: UserAPI[UD],
+      authenticationAPI: AuthenticationAPI[UD],
+      registrationAPI: RegistrationAPI[UD, US],
+      jWTCreator: JWTCreator[UD],
       timeProvider: JavaInstantTimeProvider,
       uUIDProvider: UUIDProvider,
       unnamedClient: ActorRef,
       passwordResetCodeRequestActions: PasswordResetCodeRequestActions[US],
-      accountActivationCodeSender:AccountActivationCodeSender[UserDetails[US], US],
+      accountActivationCodeSender:AccountActivationCodeSender[UD, US],
       logMeOutMessage: (UUID, Option[UUID]) => LogMeOutMessage,
       yourLoginAttemptFailedMessage: (UUID, Option[UUID]) => YourLoginAttemptFailedMessage[J],
       yourLoginAttemptSucceededMessage: (UUID, Option[UUID], String, String, String) => YourLoginAttemptSucceededMessage[J],
@@ -271,7 +271,7 @@ object Authenticator {
       accountActivationAttemptFailedMessage: (UUID, Option[UUID], String) => AccountActivationAttemptFailedMessage[J],
       accountActivationCodeCreator: AccountActivationCodeCreator,
       resendActivationCodeResultMessage: (UUID, Option[UUID], String) => ResendActivationCodeResultMessage[J],
-      userActivator: UserActivator[UserDetails[US], AccountActivationAttemptResultMessage[J]],
+      userActivator: UserActivator[UD, AccountActivationAttemptResultMessage[J]],
       youAreAlreadyAuthenticatedMessage: (UUID, Option[UUID]) => YouAreAlreadyAuthenticatedMessage[J],
       loggingYouOutMessage: (UUID, Option[UUID]) => LoggingYouOutMessage[J],
       clientPaths: ClientPaths,
