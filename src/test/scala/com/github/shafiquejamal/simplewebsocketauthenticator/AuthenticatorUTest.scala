@@ -95,7 +95,7 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
     val jWTCreator = mock[JWTCreator[UserDetails[String]]]
     val passwordResetCodeSender = mock[PasswordResetCodeRequestActions[String]]
     val accountActivationCodeSender = mock[AccountActivationCodeSender[UserDetails[String], String]]
-    val passwordResetCodeRequestActions = mock[PasswordResetCodeRequestActions[String]]
+    val passwordResetCodeRequestActions = mock[PasswordResetCodeRequestActions[UserDetails[String]]]
     val accountActivationCodeCreator = mock[AccountActivationCodeCreator]
     val userActivator = mock[UserActivator[UserDetails[String], AccountActivationAttemptResultMessage[String]]]
     val clientPaths = new ClientPaths {

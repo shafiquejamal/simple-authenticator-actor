@@ -8,7 +8,7 @@ lazy val root = (project in file(".")).
     inThisBuild(List(
       organization := "com.github.shafiquejamal",
       scalaVersion := "2.11.11",
-      version      := "0.0.6"
+      version      := "0.0.7"
     )),
     name := "simple-websocket-authenticator",
     libraryDependencies ++= Seq(

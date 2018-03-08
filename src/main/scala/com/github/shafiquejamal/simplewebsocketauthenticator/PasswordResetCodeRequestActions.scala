@@ -2,9 +2,9 @@ package com.github.shafiquejamal.simplewebsocketauthenticator
 
 import com.github.shafiquejamal.accessapi.user.UserDetails
 
-trait PasswordResetCodeRequestActions[US] {
+trait PasswordResetCodeRequestActions[UD] {
 
-  def sendUsing(userDetails: UserDetails[US]): Unit
+  def sendUsing(userDetails: UD): Unit
 
 }
 
