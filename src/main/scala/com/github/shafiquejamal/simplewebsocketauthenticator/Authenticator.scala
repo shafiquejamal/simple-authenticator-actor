@@ -43,7 +43,7 @@ class Authenticator[US, UD <: UserDetails[US], J] (
     clientPaths: ClientPaths,
     changePasswordFailedMessage: (UUID, Option[UUID]) => ChangePasswordFailedMessage[J],
     changePasswordSucceededMessage: (UUID, Option[UUID]) => ChangePasswordSucceededMessage[J],
-    messageRouterPropsCreator: MessageRouterPropsCreator,
+    messageRouterPropsCreator: MessageRouterPropsCreator[UD],
     namedClientProps: (ActorRef, ActorRef) => Props,
     requestChangeEmailFailedMessage: (UUID, Option[UUID]) => RequestChangeEmailFailedMessage[J],
     requestChangeEmailSucceededMessage: (UUID, Option[UUID]) => RequestChangeEmailSucceededMessage[J],
@@ -62,7 +62,7 @@ class Authenticator[US, UD <: UserDetails[US], J] (
         unnamedClient ! response.toJSON
         log.info("Authenticator", authenticateMeMessage, response)
       } { userDetails =>
-        createNamedClientAndRouter(userDetails.userID, userDetails.username, userDetails.email)
+        createNamedClientAndRouter(userDetails)
         val response = authenticationSuccessfulMessage(uUIDProvider.randomUUID(), Some(authenticateMeMessage.iD))
         unnamedClient ! response.toJSON
         log.info("Authenticator", authenticateMeMessage, response)
@@ -168,7 +168,7 @@ class Authenticator[US, UD <: UserDetails[US], J] (
 
   }
 
-  def processAuthenticatedRequests(clientUserID: UUID, email: String, messageRouter: ActorRef): Receive = {
+  def processAuthenticatedRequests(userDetails: UD, messageRouter: ActorRef): Receive = {
 
     case m: AuthenticateMeMessage  =>
       val response = youAreAlreadyAuthenticatedMessage(uUIDProvider.randomUUID(), Some(m.iD))
@@ -187,14 +187,14 @@ class Authenticator[US, UD <: UserDetails[US], J] (
       context.unbecome()
 
     case m: LogMeOutOfAllDevicesMessage =>
-      authenticationAPI logoutAllDevices clientUserID
-      val allAuthenticatorsForThisUser = context.actorSelection(clientPaths.namedClientPath(clientUserID))
+      authenticationAPI logoutAllDevices userDetails.userID
+      val allAuthenticatorsForThisUser = context.actorSelection(clientPaths.namedClientPath(userDetails.userID))
       allAuthenticatorsForThisUser ! logMeOutMessage(uUIDProvider.randomUUID())
 
     case changePasswordMessage: ChangeMyPasswordMessage =>
-      val maybeUser = authenticationAPI.user(clientUserID, changePasswordMessage.currentPassword)
+      val maybeUser = authenticationAPI.user(userDetails.userID, changePasswordMessage.currentPassword)
       val maybeUserDetails = maybeUser.flatMap { _ =>
-        userAPI.changePassword(clientUserID, changePasswordMessage.newPassword).toOption
+        userAPI.changePassword(userDetails.userID, changePasswordMessage.newPassword).toOption
       }
 
       val response = maybeUserDetails.fold[ChangePasswordAttemptResultMessage[J]](
@@ -205,7 +205,7 @@ class Authenticator[US, UD <: UserDetails[US], J] (
       unnamedClient ! response.toJSON
 
     case requestChangeEmailMessage: RequestChangeEmailMessage =>
-      userAPI.requestChangeEmail(clientUserID, requestChangeEmailMessage.newEmail) match {
+      userAPI.requestChangeEmail(userDetails.userID, requestChangeEmailMessage.newEmail) match {
         case Success(_) =>
           unnamedClient ! requestChangeEmailSucceededMessage(uUIDProvider.randomUUID(),
             Some(requestChangeEmailMessage.iD)).toJSON
@@ -216,7 +216,7 @@ class Authenticator[US, UD <: UserDetails[US], J] (
 
     case activateNewEmailMessage: ActivateNewEmailMessage =>
       userAPI
-      .activateNewEmail(clientUserID, email, activateNewEmailMessage.newEmail, activateNewEmailMessage.code) match {
+      .activateNewEmail(userDetails.userID, userDetails.email, activateNewEmailMessage.newEmail, activateNewEmailMessage.code) match {
         case Success(_) =>
           unnamedClient ! activateNewEmailSucceededMessage(uUIDProvider.randomUUID(),
             Some(activateNewEmailMessage.iD)).toJSON
@@ -229,15 +229,15 @@ class Authenticator[US, UD <: UserDetails[US], J] (
       messageRouter ! msg
   }
 
-  private def createNamedClientAndRouter(clientId: UUID, clientUsername: String, email: String): Unit = {
+  private def createNamedClientAndRouter(userDetails: UD): Unit = {
     val namedClient =
       context.actorOf(
-        namedClientProps(unnamedClient, self), clientPaths.namedClientActorName(clientId, uUIDProvider.randomUUID()))
+        namedClientProps(unnamedClient, self), clientPaths.namedClientActorName(userDetails.userID, uUIDProvider.randomUUID()))
     val messageRouter =
       context.actorOf(
         messageRouterPropsCreator.props(
-          namedClient, clientId, clientUsername, timeProvider, uUIDProvider))
-    context.become(processAuthenticatedRequests(clientId, email, messageRouter))
+          namedClient, userDetails, timeProvider, uUIDProvider))
+    context.become(processAuthenticatedRequests(userDetails, messageRouter))
   }
 
 }
@@ -274,7 +274,7 @@ object Authenticator {
       clientPaths: ClientPaths,
       changePasswordFailedMessage: (UUID, Option[UUID]) => ChangePasswordFailedMessage[J],
       changePasswordSucceededMessage: (UUID, Option[UUID]) => ChangePasswordSucceededMessage[J],
-      messageRouterPropsCreator: MessageRouterPropsCreator,
+      messageRouterPropsCreator: MessageRouterPropsCreator[UD],
       namedClientProps: (ActorRef, ActorRef) => Props,
       requestChangeEmailFailedMessage: (UUID, Option[UUID]) => RequestChangeEmailFailedMessage[J],
       requestChangeEmailSucceededMessage: (UUID, Option[UUID]) => RequestChangeEmailSucceededMessage[J],

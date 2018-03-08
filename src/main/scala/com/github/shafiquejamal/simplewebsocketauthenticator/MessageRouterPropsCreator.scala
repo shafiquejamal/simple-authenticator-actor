@@ -6,12 +6,11 @@ import akka.actor.{ActorRef, Props}
 import com.github.shafiquejamal.util.id.UUIDProvider
 import com.github.shafiquejamal.util.time.JavaInstantTimeProvider
 
-trait MessageRouterPropsCreator {
+trait MessageRouterPropsCreator[UD] {
 
   def props(
       client: ActorRef,
-      clientId: UUID,
-      clientUsername: String,
+      userDetails: UD,
       timeProvider: JavaInstantTimeProvider,
       uUIDProvider: UUIDProvider): Props
 
