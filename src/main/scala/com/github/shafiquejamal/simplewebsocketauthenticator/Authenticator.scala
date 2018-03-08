@@ -14,7 +14,7 @@ import com.github.shafiquejamal.util.time.JavaInstantTimeProvider
 import scala.util.{Failure, Success}
 
 class Authenticator[US, UD <: UserDetails[US], J] (
-    userTokenValidator: TokenValidator,
+    userTokenValidator: TokenValidator[US, UD],
     userAPI: UserAPI[UD],
     authenticationAPI: AuthenticationAPI[UD],
     registrationAPI: RegistrationAPI[UD, US],
@@ -24,7 +24,7 @@ class Authenticator[US, UD <: UserDetails[US], J] (
     unnamedClient: ActorRef,
     passwordResetCodeRequestActions: PasswordResetCodeRequestActions[US],
     accountActivationCodeSender:AccountActivationCodeSender[UD, US],
-    logMeOutMessage: (UUID, Option[UUID]) => LogMeOutMessage,
+    logMeOutMessage: UUID => LogMeOutMessage,
     yourLoginAttemptFailedMessage: (UUID, Option[UUID]) => YourLoginAttemptFailedMessage[J],
     yourLoginAttemptSucceededMessage: (UUID, Option[UUID], String, String, String) => YourLoginAttemptSucceededMessage[J],
     passwordResetCodeSentMessage: (UUID, Option[UUID]) => PasswordResetCodeSentMessage[J],
@@ -55,17 +55,14 @@ class Authenticator[US, UD <: UserDetails[US], J] (
   override def receive: Receive = {
 
     case authenticateMeMessage: AuthenticateMeMessage =>
-      val maybeValidUser = userTokenValidator.decodeAndValidateToken(
-        authenticateMeMessage.jWT,
-        userTokenValidator.blockToExecuteIfAuthorized,
-        userTokenValidator.blockToExecuteIfUnauthorized)
+      val maybeValidUser = userTokenValidator.decodeAndValidateToken(authenticateMeMessage.jWT)
 
       maybeValidUser.fold {
         val response = loggingYouOutMessage(uUIDProvider.randomUUID(), Some(authenticateMeMessage.iD))
         unnamedClient ! response.toJSON
         log.info("Authenticator", authenticateMeMessage, response)
-      } { userContact =>
-        createNamedClientAndRouter(userContact.userID, userContact.username, userContact.email)
+      } { userDetails =>
+        createNamedClientAndRouter(userDetails.userID, userDetails.username, userDetails.email)
         val response = authenticationSuccessfulMessage(uUIDProvider.randomUUID(), Some(authenticateMeMessage.iD))
         unnamedClient ! response.toJSON
         log.info("Authenticator", authenticateMeMessage, response)
@@ -192,7 +189,7 @@ class Authenticator[US, UD <: UserDetails[US], J] (
     case m: LogMeOutOfAllDevicesMessage =>
       authenticationAPI logoutAllDevices clientUserID
       val allAuthenticatorsForThisUser = context.actorSelection(clientPaths.namedClientPath(clientUserID))
-      allAuthenticatorsForThisUser ! logMeOutMessage(uUIDProvider.randomUUID(), Some(m.iD))
+      allAuthenticatorsForThisUser ! logMeOutMessage(uUIDProvider.randomUUID())
 
     case changePasswordMessage: ChangeMyPasswordMessage =>
       val maybeUser = authenticationAPI.user(clientUserID, changePasswordMessage.currentPassword)
@@ -248,7 +245,7 @@ class Authenticator[US, UD <: UserDetails[US], J] (
 object Authenticator {
 
   def props[US, UD <: UserDetails[US], J](
-      userTokenValidator: TokenValidator,
+      userTokenValidator: TokenValidator[US, UD],
       userAPI: UserAPI[UD],
       authenticationAPI: AuthenticationAPI[UD],
       registrationAPI: RegistrationAPI[UD, US],
@@ -258,7 +255,7 @@ object Authenticator {
       unnamedClient: ActorRef,
       passwordResetCodeRequestActions: PasswordResetCodeRequestActions[US],
       accountActivationCodeSender:AccountActivationCodeSender[UD, US],
-      logMeOutMessage: (UUID, Option[UUID]) => LogMeOutMessage,
+      logMeOutMessage: UUID => LogMeOutMessage,
       yourLoginAttemptFailedMessage: (UUID, Option[UUID]) => YourLoginAttemptFailedMessage[J],
       yourLoginAttemptSucceededMessage: (UUID, Option[UUID], String, String, String) => YourLoginAttemptSucceededMessage[J],
       passwordResetCodeSentMessage: (UUID, Option[UUID]) => PasswordResetCodeSentMessage[J],

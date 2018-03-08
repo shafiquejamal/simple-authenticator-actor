@@ -7,7 +7,7 @@ import com.github.shafiquejamal.accessmessage.OutBound._
 
 object AuthenticatorMessagesFixture {
 
-  case class LogMeOutMessageImpl(override val iD: UUID, override val previousMessageID: Option[UUID] = None)
+  case class LogMeOutMessageImpl(override val iD: UUID)
     extends LogMeOutMessage
 
   case class YourLoginAttemptFailedMessageImpl(

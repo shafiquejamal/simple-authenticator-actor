@@ -83,17 +83,11 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
   }
   
   trait MocksFixture {
-    val tokenValidator = new TokenValidator {
-      var result: Option[UserContact] = None
+    val tokenValidator = new TokenValidator[String, UserDetails[String]] {
+      var result: Option[UserDetails[String]] = None
   
-      override def decodeAndValidateToken(
-          token: String,
-          blockToExecuteIfAuthorized: => (UUID, String) => Option[UserContact],
-          blockToExecuteIfUnauthorized: => Option[(UUID, String)]): Option[UserContact] = result
+      override def decodeAndValidateToken(token: String): Option[UserDetails[String]] = result
   
-      override val blockToExecuteIfAuthorized: (UUID, String) => Option[UserContact] = null
-  
-      override def blockToExecuteIfUnauthorized: Option[(UUID, String)] = null
     }
     val userAPI = mock[UserAPI[UserDetails[String]]]
     val authenticationAPI = mock[AuthenticationAPI[UserDetails[String]]]
@@ -190,7 +184,7 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
     
     def authenticateUser() {
       resetUUID()
-      tokenValidator.result = Some(userContact)
+      tokenValidator.result = Some(userDetails)
       (messageRouterPropsCreator.props _).expects(*, *, *, *, *).returning(DummyActor.props).anyNumberOfTimes()
       authenticator ! authenticateMeMessage
       expectMsg(authenticationSuccessfulMessage(secondNewMessageUUID, Some(originatingMessageUUID)).toJSON)
@@ -411,7 +405,7 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
   it should "log the user out of the current device when requested" in new AuthenticatorFixture {
     authenticateUser()
     resetUUID()
-    val logMeOutMessageImpl = logMeOutMessage(originatingMessageUUID, None)
+    val logMeOutMessageImpl = logMeOutMessage(originatingMessageUUID)
     authenticator ! logMeOutMessageImpl
     expectMsg(loggingYouOutMessage(newMessageUUID, Some(originatingMessageUUID)).toJSON)
   }
