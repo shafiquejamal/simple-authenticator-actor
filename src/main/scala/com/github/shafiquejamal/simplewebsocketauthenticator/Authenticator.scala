@@ -23,7 +23,7 @@ class Authenticator[US, UD <: UserDetails[US], J] (
     uUIDProvider: UUIDProvider,
     unnamedClient: ActorRef,
     passwordResetCodeRequestActions: PasswordResetCodeRequestActions[UD],
-    accountActivationCodeSender:AccountActivationCodeSender[UD, US],
+    accountActivationCodeSender:AccountActivationCodeSender[US, UD],
     logMeOutMessage: UUID => LogMeOutMessage,
     yourLoginAttemptFailedMessage: (UUID, Option[UUID]) => YourLoginAttemptFailedMessage[J],
     yourLoginAttemptSucceededMessage: (UUID, Option[UUID], String, String, String) => YourLoginAttemptSucceededMessage[J],
@@ -131,7 +131,7 @@ class Authenticator[US, UD <: UserDetails[US], J] (
             yourRegistrationAttemptFailedMessage(uUIDProvider.randomUUID(), Some(registerMeMessage.iD))
         ){ userDetails =>
           val activationCode = accountActivationCodeCreator.generate(userDetails.userID.toString)
-          accountActivationCodeSender.sendActivationCode(userDetails.username, userDetails.email, activationCode)
+          accountActivationCodeSender.sendActivationCode(userDetails, activationCode)
           yourRegistrationAttemptSucceededMessage(uUIDProvider.randomUUID(), Some(registerMeMessage.iD))
       }
       unnamedClient ! response.toJSON
@@ -160,7 +160,7 @@ class Authenticator[US, UD <: UserDetails[US], J] (
           "User not registered or already verified")
       ) { userDetails =>
           val activationCode = accountActivationCodeCreator.generate(userDetails.userID.toString)
-          accountActivationCodeSender.sendActivationCode(userDetails.username, userDetails.email, activationCode)
+          accountActivationCodeSender.sendActivationCode(userDetails, activationCode)
         resendActivationCodeResultMessage(uUIDProvider.randomUUID(), Some(resendMyActivationCodeMessage.iD),
           "Code sent")
       }
@@ -254,7 +254,7 @@ object Authenticator {
       uUIDProvider: UUIDProvider,
       unnamedClient: ActorRef,
       passwordResetCodeRequestActions: PasswordResetCodeRequestActions[UD],
-      accountActivationCodeSender:AccountActivationCodeSender[UD, US],
+      accountActivationCodeSender:AccountActivationCodeSender[US, UD],
       logMeOutMessage: UUID => LogMeOutMessage,
       yourLoginAttemptFailedMessage: (UUID, Option[UUID]) => YourLoginAttemptFailedMessage[J],
       yourLoginAttemptSucceededMessage: (UUID, Option[UUID], String, String, String) => YourLoginAttemptSucceededMessage[J],

@@ -94,7 +94,7 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
     val registrationAPI = mock[RegistrationAPI[UserDetails[String], String]]
     val jWTCreator = mock[JWTCreator[UserDetails[String]]]
     val passwordResetCodeSender = mock[PasswordResetCodeRequestActions[String]]
-    val accountActivationCodeSender = mock[AccountActivationCodeSender[UserDetails[String], String]]
+    val accountActivationCodeSender = mock[AccountActivationCodeSender[String, UserDetails[String]]]
     val passwordResetCodeRequestActions = mock[PasswordResetCodeRequestActions[UserDetails[String]]]
     val accountActivationCodeCreator = mock[AccountActivationCodeCreator]
     val userActivator = mock[UserActivator[UserDetails[String], AccountActivationAttemptResultMessage[String]]]
@@ -144,7 +144,7 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
   }
   
   trait AuthenticatorFixture extends OutboundMessagesFixture with MocksFixture with Fixture {
-    val authenticator = system.actorOf(Authenticator.props(
+    val authenticator = system.actorOf(Authenticator.props[String, UserDetails[String], String](
         tokenValidator,
         userAPI,
         authenticationAPI,
@@ -316,7 +316,7 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
     resetUUID()
     (accountActivationCodeSender.statusOnRegistration _).expects().returning(statusOnRegistration)
     (accountActivationCodeCreator.generate _).expects(userDetails.userID.toString).returning(activationCode)
-    (accountActivationCodeSender.sendActivationCode _).expects(userDetails.username, userDetails.email, activationCode)
+    (accountActivationCodeSender.sendActivationCode _).expects(userDetails, activationCode)
     (registrationAPI.signUp _).expects(
       registerMeMessage.maybeUsername,
       registerMeMessage.email,
@@ -382,7 +382,7 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
     resetUUID()
     (userAPI.findUnverifiedUser _).expects(resendMyActivationCodeMessage.email).returning(Some(userDetails))
     (accountActivationCodeCreator.generate _).expects(userDetails.userID.toString).returning(activationCode)
-    (accountActivationCodeSender.sendActivationCode _).expects(userDetails.username, userDetails.email, activationCode)
+    (accountActivationCodeSender.sendActivationCode _).expects(userDetails, activationCode)
     authenticator ! resendMyActivationCodeMessage
     expectMsg(resendActivationCodeResultMessage(newMessageUUID, Some(originatingMessageUUID), "Code sent").toJSON)
   }
