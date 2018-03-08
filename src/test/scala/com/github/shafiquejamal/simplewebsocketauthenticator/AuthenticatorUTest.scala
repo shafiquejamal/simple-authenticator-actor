@@ -358,7 +358,7 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
     (userAPI.findByEmailLatest _).expects(activateMyAccountMessage.emailOrUsername).returning(Some(userDetails))
     (accountActivationCodeCreator.isMatch _).expects(userDetails.userID.toString, activationCode).returning(true)
     val successMessage = accountActivationAttemptSucceededMessage(newMessageUUID, Some(originatingMessageUUID))
-    (userActivator.activateUser _).expects(userDetails, activationCode).returning(successMessage)
+    (userActivator.activateUser _).expects(userDetails, Some(originatingMessageUUID)).returning(successMessage)
     authenticator ! activateMyAccountMessage
     expectMsg(successMessage.toJSON)
   }

@@ -144,7 +144,7 @@ class Authenticator[US, UD <: UserDetails[US], J] (
           "User does not exist")
       ) { user: UD =>
         if (accountActivationCodeCreator.isMatch(user.userID.toString, code)) {
-          userActivator.activateUser(user, code)
+          userActivator.activateUser(user, Some(activateMyAccountMessage.iD))
         } else {
           accountActivationAttemptFailedMessage(uUIDProvider.randomUUID(), Some(activateMyAccountMessage.iD),
             "Incorrect code")
