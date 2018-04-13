@@ -51,7 +51,9 @@ class Authenticator[US, UD <: UserDetails[US], J] (
     activateNewEmailSucceededMessage: (UUID, Option[UUID]) => ActivateNewEmailSucceededMessage[J],
     authenticationSuccessfulMessage: (UUID, Option[UUID]) => AuthenticationSuccessfulMessage[J],
     activationCodeSenderMessages: Map[String, String],
-    activationCodeResenderMessages: Map[String, String])
+    activationCodeResenderMessages: Map[String, String],
+    logMeInMessageValidator: LogMeInMessage => Option[(UUID, Option[UUID]) => LoginFieldsValidationFailedMessage[J]],
+    registerMeMessageValidator: RegisterMeMessage => Option[(UUID, Option[UUID]) => RegistrationFieldsValidationFailedMessage[J]])
   extends Actor with ActorLogging {
 
   override def receive: Receive = {
@@ -62,31 +64,37 @@ class Authenticator[US, UD <: UserDetails[US], J] (
       maybeValidUser.fold {
         val response = loggingYouOutMessage(uUIDProvider.randomUUID(), Some(authenticateMeMessage.iD))
         unnamedClient ! response.toJSON
-        log.info("Authenticator", authenticateMeMessage, response)
+        log.info("Authenticator", authenticateMeMessage.iD, response)
       } { userDetails =>
         createNamedClientAndRouter(userDetails)
         val response = authenticationSuccessfulMessage(uUIDProvider.randomUUID(), Some(authenticateMeMessage.iD))
         unnamedClient ! response.toJSON
-        log.info("Authenticator", authenticateMeMessage, response)
+        log.info("Authenticator", authenticateMeMessage.iD, response)
       }
 
     case logMeInMessage: LogMeInMessage =>
-      val maybeUserDetails =
-        authenticationAPI.user(
+      logMeInMessageValidator(logMeInMessage).fold {
+        val maybeUserDetails =
+          authenticationAPI.user(
             logMeInMessage.maybeUsername,
             logMeInMessage.maybeEmail,
             logMeInMessage.password)
 
-      val response = maybeUserDetails
-        .fold[LoginAttemptResultMessage[J]](
-          yourLoginAttemptFailedMessage(uUIDProvider.randomUUID(), Some(logMeInMessage.iD))){ userDetails =>
-        val jWT = jWTCreator.create(userDetails, timeProvider.now())
-        yourLoginAttemptSucceededMessage(
+        val response = maybeUserDetails
+          .fold[LoginAttemptResultMessage[J]](
+          yourLoginAttemptFailedMessage(uUIDProvider.randomUUID(), Some(logMeInMessage.iD))) { userDetails =>
+          val jWT = jWTCreator.create(userDetails, timeProvider.now())
+          yourLoginAttemptSucceededMessage(
             uUIDProvider.randomUUID(), Some(logMeInMessage.iD), userDetails.username, userDetails.email, jWT)
-      }
+        }
 
-      unnamedClient ! response.toJSON
-      log.info("Authenticator", logMeInMessage, response)
+        unnamedClient ! response.toJSON
+        log.info("Authenticator", logMeInMessage, "jWT sent")
+      }{ responseCreator =>
+        val response = responseCreator(uUIDProvider.randomUUID(), Some(logMeInMessage.iD))
+        log.info("Authenticator", logMeInMessage, response)
+        unnamedClient ! response.toJSON
+      }
 
     case passwordResetCodeRequestMessage: PasswordResetCodeRequestMessage =>
       val maybeUser = userAPI findUnverifiedUser passwordResetCodeRequestMessage.email
@@ -284,7 +292,9 @@ object Authenticator {
       activateNewEmailSucceededMessage: (UUID, Option[UUID]) => ActivateNewEmailSucceededMessage[J],
       authenticationSuccessfulMessage: (UUID, Option[UUID]) => AuthenticationSuccessfulMessage[J],
       activationCodeSenderMessages: Map[String, String],
-      activationCodeResenderMessages: Map[String, String]) =
+      activationCodeResenderMessages: Map[String, String],
+      logMeInMessageValidator: LogMeInMessage => Option[(UUID, Option[UUID]) => LoginFieldsValidationFailedMessage[J]],
+      registerMeMessageValidator: RegisterMeMessage => Option[(UUID, Option[UUID]) => RegistrationFieldsValidationFailedMessage[J]]) =
     Props(
       new Authenticator(
         userTokenValidator,
@@ -324,5 +334,7 @@ object Authenticator {
         activateNewEmailSucceededMessage,
         authenticationSuccessfulMessage,
         activationCodeSenderMessages,
-        activationCodeResenderMessages))
+        activationCodeResenderMessages,
+        logMeInMessageValidator,
+        registerMeMessageValidator))
 }

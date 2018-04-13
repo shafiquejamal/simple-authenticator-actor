@@ -8,7 +8,7 @@ import com.github.shafiquejamal.accessapi.access.authentication.{AuthenticationA
 import com.github.shafiquejamal.accessapi.access.registration.{CodeSender, RegistrationAPI, UserActivator}
 import com.github.shafiquejamal.accessapi.user.{UserAPI, UserContact, UserDetails}
 import com.github.shafiquejamal.accessmessage.InBound._
-import com.github.shafiquejamal.accessmessage.OutBound.AccountActivationAttemptResultMessage
+import com.github.shafiquejamal.accessmessage.OutBound.{AccountActivationAttemptResultMessage, LoginFieldsValidationFailedMessage, YourLoginAttemptFailedMessage}
 import com.github.shafiquejamal.simplewebsocketauthenticator.AuthenticatorMessagesFixture._
 import com.github.shafiquejamal.util.id.TestUUIDProviderImpl
 import com.github.shafiquejamal.util.time.TestJavaInstantTimeProvider
@@ -80,6 +80,17 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
       override val newEmail: String = aNewEmail
       override val iD: UUID = originatingMessageUUID
     }
+
+    val logMeInMessageValidator: LogMeInMessage => Option[(UUID, Option[UUID]) => LoginFieldsValidationFailedMessage[String]] =
+      logMeInMessage =>
+      if (logMeInMessage.maybeEmail.map(_.trim).isEmpty && logMeInMessage.maybeUsername.map(_.trim).isEmpty) {
+        Some(LoginFieldsValidationFailedMessageImpl(_, _, "Username and email are both empty"))
+      } else if (logMeInMessage.password.trim.isEmpty) {
+        Some(LoginFieldsValidationFailedMessageImpl(_, _, "Password is empty"))
+      } else {
+        None
+      }
+
   }
   
   trait MocksFixture {
@@ -184,7 +195,9 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
         activateNewEmailSucceededMessage,
         authenticationSuccessfulMessage,
         activationCodeSenderMessages,
-        activationCodeResenderMessages))
+        activationCodeResenderMessages,
+        logMeInMessageValidator,
+        null))
     
     def authenticateUser() {
       resetUUID()
@@ -196,8 +209,7 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
     
   }
   
-  "For unauthenticated users, the authenticator" should
-  "send back a message indicating that an email address is available if it is available" in
+  "The authenticator" should "send back a message indicating that an email address is available if it is available" in
   new AuthenticatorFixture {
     val isEmailAvailableMessage: IsEmailAvailableMessage = new IsEmailAvailableMessage {
       override val email: String = emailAddress
@@ -215,7 +227,25 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
         isEmailAvailability).toJSON)
     }
   }
-  
+
+  it should "refrain from trying to log the user in if the login message is in valid" in new AuthenticatorFixture {
+    val badLogMeInMessage = new LogMeInMessage {
+      override val maybeEmail: Option[String] = None
+      override val maybeUsername: Option[String] = None
+      override val password: String = aPassword
+      override val iD: UUID = generalUUID
+    }
+
+    resetUUID()
+    authenticator ! badLogMeInMessage
+    expectMsg(LoginFieldsValidationFailedMessageImpl(newMessageUUID, Some(generalUUID), "").toJSON)
+  }
+
+
+  it should "refrain from trying to register the user in if the login message is in valid" in new AuthenticatorFixture {
+
+  }
+
   it should "indicate whether a username is available" in new AuthenticatorFixture {
     val usernameToCheck = "some-user-name"
     val isUsernameAvailableMessage: IsUsernameAvailableMessage = new IsUsernameAvailableMessage {
@@ -391,8 +421,8 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
     expectMsg(resendActivationCodeResultMessage(newMessageUUID, Some(originatingMessageUUID), "Code sent").toJSON)
   }
   
-  "For authenticated users, the authenticator" should "indicate that the user is already logged in if the user" +
-  " attempts to authenticate" in new AuthenticatorFixture {
+  "For authenticated users, the authenticator" should "indicate that the user is already logged in if the user " +
+  "attempts to authenticate" in new AuthenticatorFixture {
     authenticateUser()
     resetUUID()
     authenticator ! authenticateMeMessage

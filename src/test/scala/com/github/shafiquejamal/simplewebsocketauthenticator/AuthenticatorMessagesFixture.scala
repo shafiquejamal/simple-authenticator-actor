@@ -16,6 +16,20 @@ object AuthenticatorMessagesFixture {
     override def toJSON: String = "YourLoginAttemptFailedMessageImpl_${iD.toString}"
   }
 
+  case class LoginFieldsValidationFailedMessageImpl(
+      override val iD: UUID,
+      override val previousMessageID: Option[UUID] = None,
+      override val reason: String)
+    extends LoginFieldsValidationFailedMessage[String] {
+    override def toJSON: String = "YourLoginAttemptFailedMessageImpl_${iD.toString}"
+  }
+
+  case class YourLoginFailedToValidate(
+    override val iD: UUID, override val previousMessageID: Option[UUID] = None)
+    extends YourLoginAttemptFailedMessage[String] {
+    override def toJSON: String = "YourLoginAttemptFailedToValidate_${iD.toString}"
+  }
+
   case class YourLoginAttemptSucceededMessageImpl(
     override val iD: UUID,
     override val previousMessageID: Option[UUID],
