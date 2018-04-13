@@ -5,7 +5,7 @@ import java.util.UUID
 import akka.actor.{Actor, ActorRef, ActorSystem, Props}
 import akka.testkit.TestKit
 import com.github.shafiquejamal.accessapi.access.authentication.{AuthenticationAPI, JWTCreator, TokenValidator}
-import com.github.shafiquejamal.accessapi.access.registration.{AccountActivationCodeSender, RegistrationAPI, UserActivator}
+import com.github.shafiquejamal.accessapi.access.registration.{CodeSender, RegistrationAPI, UserActivator}
 import com.github.shafiquejamal.accessapi.user.{UserAPI, UserContact, UserDetails}
 import com.github.shafiquejamal.accessmessage.InBound._
 import com.github.shafiquejamal.accessmessage.OutBound.AccountActivationAttemptResultMessage
@@ -94,7 +94,7 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
     val registrationAPI = mock[RegistrationAPI[UserDetails[String], String]]
     val jWTCreator = mock[JWTCreator[UserDetails[String]]]
     val passwordResetCodeSender = mock[PasswordResetCodeRequestActions[String]]
-    val accountActivationCodeSender = mock[AccountActivationCodeSender[String, UserDetails[String]]]
+    val accountActivationCodeSender = mock[CodeSender[String, UserDetails[String]]]
     val passwordResetCodeRequestActions = mock[PasswordResetCodeRequestActions[UserDetails[String]]]
     val accountActivationCodeCreator = mock[AccountActivationCodeCreator]
     val userActivator = mock[UserActivator[UserDetails[String], AccountActivationAttemptResultMessage[String]]]
@@ -141,6 +141,8 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
     val activateNewEmailFailedMessage = ActivateNewEmailFailedMessageImpl.apply _
     val activateNewEmailSucceededMessage = ActivateNewEmailSucceededMessageImpl.apply _
     val authenticationSuccessfulMessage = AuthenticationSuccessfulMessageImpl.apply _
+    val activationCodeSenderMessages = Map[String, String]("subject" -> "activation code", "body" -> "here is your activation code:")
+    val activationCodeResenderMessages = Map[String, String]("subject" -> "resening activation code", "body" -> "again, here is your activation code:")
   }
   
   trait AuthenticatorFixture extends OutboundMessagesFixture with MocksFixture with Fixture {
@@ -180,7 +182,9 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
         requestChangeEmailSucceededMessage,
         activateNewEmailFailedMessage,
         activateNewEmailSucceededMessage,
-        authenticationSuccessfulMessage))
+        authenticationSuccessfulMessage,
+        activationCodeSenderMessages,
+        activationCodeResenderMessages))
     
     def authenticateUser() {
       resetUUID()
@@ -262,7 +266,7 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
   
   it should "send a password reset code if requested for a user's email that exists" in new AuthenticatorFixture {
     
-    (userAPI.findByEmailLatest _).expects(emailAddress).returning(None)
+    (userAPI.findUnverifiedUser _).expects(emailAddress).returning(None)
     val passwordResetCodeRequestMessage = new PasswordResetCodeRequestMessage {
       override def email: String = emailAddress
   
@@ -273,7 +277,7 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
     expectMsg(passwordResetCodeMessageSent(newMessageUUID, Some(originatingMessageUUID)).toJSON)
     
     resetUUID()
-    (userAPI.findByEmailLatest _).expects(emailAddress).returning(Some(userDetails))
+    (userAPI.findUnverifiedUser _).expects(emailAddress).returning(Some(userDetails))
     (passwordResetCodeRequestActions.sendUsing _).expects(userDetails).returning(Unit)
     authenticator ! passwordResetCodeRequestMessage
     expectMsg(passwordResetCodeMessageSent(newMessageUUID, Some(originatingMessageUUID)).toJSON)
@@ -316,7 +320,7 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
     resetUUID()
     (accountActivationCodeSender.statusOnRegistration _).expects().returning(statusOnRegistration)
     (accountActivationCodeCreator.generate _).expects(userDetails.userID.toString).returning(activationCode)
-    (accountActivationCodeSender.sendActivationCode _).expects(userDetails, activationCode)
+    (accountActivationCodeSender.sendActivationCode _).expects(userDetails, activationCode, activationCodeSenderMessages)
     (registrationAPI.signUp _).expects(
       registerMeMessage.maybeUsername,
       registerMeMessage.email,
@@ -344,18 +348,18 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
     }
     
     resetUUID()
-    (userAPI.findByEmailLatest _).expects(activateMyAccountMessage.emailOrUsername).returning(None)
+    (userAPI.findUnverifiedUser _).expects(activateMyAccountMessage.emailOrUsername).returning(None)
     authenticator ! activateMyAccountMessage
     expectMsg(accountActivationAttemptFailedMessage(newMessageUUID, Some(originatingMessageUUID), "User does not exist").toJSON)
   
     resetUUID()
-    (userAPI.findByEmailLatest _).expects(activateMyAccountMessage.emailOrUsername).returning(Some(userDetails))
+    (userAPI.findUnverifiedUser _).expects(activateMyAccountMessage.emailOrUsername).returning(Some(userDetails))
     (accountActivationCodeCreator.isMatch _).expects(userDetails.userID.toString, activationCode).returning(false)
     authenticator ! activateMyAccountMessage
     expectMsg(accountActivationAttemptFailedMessage(newMessageUUID, Some(originatingMessageUUID), "Incorrect code").toJSON)
   
     resetUUID()
-    (userAPI.findByEmailLatest _).expects(activateMyAccountMessage.emailOrUsername).returning(Some(userDetails))
+    (userAPI.findUnverifiedUser _).expects(activateMyAccountMessage.emailOrUsername).returning(Some(userDetails))
     (accountActivationCodeCreator.isMatch _).expects(userDetails.userID.toString, activationCode).returning(true)
     val successMessage = accountActivationAttemptSucceededMessage(newMessageUUID, Some(originatingMessageUUID))
     (userActivator.activateUser _).expects(userDetails, Some(originatingMessageUUID)).returning(successMessage)
@@ -382,7 +386,7 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
     resetUUID()
     (userAPI.findUnverifiedUser _).expects(resendMyActivationCodeMessage.email).returning(Some(userDetails))
     (accountActivationCodeCreator.generate _).expects(userDetails.userID.toString).returning(activationCode)
-    (accountActivationCodeSender.sendActivationCode _).expects(userDetails, activationCode)
+    (accountActivationCodeSender.sendActivationCode _).expects(userDetails, activationCode, activationCodeResenderMessages)
     authenticator ! resendMyActivationCodeMessage
     expectMsg(resendActivationCodeResultMessage(newMessageUUID, Some(originatingMessageUUID), "Code sent").toJSON)
   }
@@ -471,8 +475,8 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
   it should "fail to activate the new email if the code is incorrect" in new AuthenticatorFixture {
     authenticateUser()
     resetUUID()
-    (userAPI.activateNewEmail _).expects(
-        userDetails.userID, userDetails.email, activateNewEmailMessage.newEmail, activateNewEmailMessage.code).returning(Failure(new Exception("")))
+    (userAPI.changeEmail _).expects(
+        userDetails.userID, activateNewEmailMessage.newEmail, activateNewEmailMessage.code).returning(Failure(new Exception("")))
     authenticator ! activateNewEmailMessage
     expectMsg(activateNewEmailFailedMessage(newMessageUUID, Some(originatingMessageUUID)).toJSON)
   }
@@ -480,8 +484,8 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
   it should "activate the new email if the code is correct" in new AuthenticatorFixture {
     authenticateUser()
     resetUUID()
-    (userAPI.activateNewEmail _).expects(
-        userDetails.userID, userDetails.email, activateNewEmailMessage.newEmail, activateNewEmailMessage.code).returning(Success(userDetails))
+    (userAPI.changeEmail _).expects(
+        userDetails.userID, activateNewEmailMessage.newEmail, activateNewEmailMessage.code).returning(Success(userDetails))
     authenticator ! activateNewEmailMessage
     expectMsg(activateNewEmailSucceededMessage(newMessageUUID, Some(originatingMessageUUID)).toJSON)
   }
