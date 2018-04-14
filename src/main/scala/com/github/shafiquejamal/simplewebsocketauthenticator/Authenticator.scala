@@ -132,19 +132,25 @@ class Authenticator[US, UD <: UserDetails[US], J] (
       log.info("Authenticator", isUsernameAvailableMessage, response)
 
     case registerMeMessage: RegisterMeMessage =>
-      val maybeUserDetails =
-        registrationAPI.signUp(
+      registerMeMessageValidator(registerMeMessage).fold {
+        val maybeUserDetails =
+          registrationAPI.signUp(
             registerMeMessage.maybeUsername, registerMeMessage.email, registerMeMessage.password,
             accountActivationCodeSender.statusOnRegistration)
-      val response = maybeUserDetails
-        .toOption.fold[RegistrationAttemptResultMessage[J]](
-            yourRegistrationAttemptFailedMessage(uUIDProvider.randomUUID(), Some(registerMeMessage.iD))
-        ){ userDetails =>
+        val response = maybeUserDetails
+          .toOption.fold[RegistrationAttemptResultMessage[J]](
+          yourRegistrationAttemptFailedMessage(uUIDProvider.randomUUID(), Some(registerMeMessage.iD))
+        ) { userDetails =>
           val activationCode = accountActivationCodeCreator.generate(userDetails.userID.toString)
           accountActivationCodeSender.sendActivationCode(userDetails, activationCode, activationCodeSenderMessages)
           yourRegistrationAttemptSucceededMessage(uUIDProvider.randomUUID(), Some(registerMeMessage.iD))
+        }
+        unnamedClient ! response.toJSON
+      } { responseCreator =>
+        val response = responseCreator(uUIDProvider.randomUUID(), Some(registerMeMessage.iD))
+        log.info("Authenticator", registerMeMessage, response)
+        unnamedClient ! response.toJSON
       }
-      unnamedClient ! response.toJSON
 
     case activateMyAccountMessage: ActivateMyAccountMessage =>
       val (email, code) = (activateMyAccountMessage.emailOrUsername, activateMyAccountMessage.code)

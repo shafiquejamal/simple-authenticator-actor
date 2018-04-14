@@ -8,7 +8,7 @@ import com.github.shafiquejamal.accessapi.access.authentication.{AuthenticationA
 import com.github.shafiquejamal.accessapi.access.registration.{CodeSender, RegistrationAPI, UserActivator}
 import com.github.shafiquejamal.accessapi.user.{UserAPI, UserContact, UserDetails}
 import com.github.shafiquejamal.accessmessage.InBound._
-import com.github.shafiquejamal.accessmessage.OutBound.{AccountActivationAttemptResultMessage, LoginFieldsValidationFailedMessage, YourLoginAttemptFailedMessage}
+import com.github.shafiquejamal.accessmessage.OutBound.{AccountActivationAttemptResultMessage, LoginFieldsValidationFailedMessage, RegistrationFieldsValidationFailedMessage, YourLoginAttemptFailedMessage}
 import com.github.shafiquejamal.simplewebsocketauthenticator.AuthenticatorMessagesFixture._
 import com.github.shafiquejamal.util.id.TestUUIDProviderImpl
 import com.github.shafiquejamal.util.time.TestJavaInstantTimeProvider
@@ -81,12 +81,21 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
       override val iD: UUID = originatingMessageUUID
     }
 
-    val logMeInMessageValidator: LogMeInMessage => Option[(UUID, Option[UUID]) => LoginFieldsValidationFailedMessage[String]] =
-      logMeInMessage =>
+    val logMeInMessageValidator:
+    LogMeInMessage => Option[(UUID, Option[UUID]) => LoginFieldsValidationFailedMessage[String]] = logMeInMessage =>
       if (logMeInMessage.maybeEmail.map(_.trim).isEmpty && logMeInMessage.maybeUsername.map(_.trim).isEmpty) {
         Some(LoginFieldsValidationFailedMessageImpl(_, _, "Username and email are both empty"))
       } else if (logMeInMessage.password.trim.isEmpty) {
         Some(LoginFieldsValidationFailedMessageImpl(_, _, "Password is empty"))
+      } else {
+        None
+      }
+
+    val registerMeMessageValidator:
+    RegisterMeMessage => Option[(UUID, Option[UUID]) => RegistrationFieldsValidationFailedMessage[String]] =
+      registerMeMessage =>
+      if (registerMeMessage.email.contains("@spammers.com")) {
+        Some(RegistrationFieldsValidationFailedMessageImpl(_, _, "spammers not allowed"))
       } else {
         None
       }
@@ -197,7 +206,7 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
         activationCodeSenderMessages,
         activationCodeResenderMessages,
         logMeInMessageValidator,
-        null))
+        registerMeMessageValidator))
     
     def authenticateUser() {
       resetUUID()
@@ -228,7 +237,7 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
     }
   }
 
-  it should "refrain from trying to log the user in if the login message is in valid" in new AuthenticatorFixture {
+  it should "refrain from trying to log the user in if the login message is invalid" in new AuthenticatorFixture {
     val badLogMeInMessage = new LogMeInMessage {
       override val maybeEmail: Option[String] = None
       override val maybeUsername: Option[String] = None
@@ -238,12 +247,8 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
 
     resetUUID()
     authenticator ! badLogMeInMessage
-    expectMsg(LoginFieldsValidationFailedMessageImpl(newMessageUUID, Some(generalUUID), "").toJSON)
-  }
-
-
-  it should "refrain from trying to register the user in if the login message is in valid" in new AuthenticatorFixture {
-
+    expectMsg(LoginFieldsValidationFailedMessageImpl(
+      newMessageUUID, Some(generalUUID), "Username and email are both empty").toJSON)
   }
 
   it should "indicate whether a username is available" in new AuthenticatorFixture {
@@ -368,6 +373,21 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
       statusOnRegistration).returning(Failure(new Exception("--")))
     authenticator ! registerMeMessage
     expectMsg(yourRegistrationAttemptFailedMessage(newMessageUUID, Some(originatingMessageUUID)).toJSON)
+  }
+
+  it should "refrain from trying to register the user in if the login message is in valid" in new AuthenticatorFixture {
+    val badRegisterMeMessage = new RegisterMeMessage {
+      override val iD = originatingMessageUUID
+      override val maybeUsername = Some(userDetails.username)
+      override val email = "we-are@spammers.com"
+      override val password = aPassword
+    }
+
+    resetUUID()
+    authenticator ! badRegisterMeMessage
+    expectMsg(
+      RegistrationFieldsValidationFailedMessageImpl(
+        newMessageUUID, Some(originatingMessageUUID), "spammers not allowed").toJSON)
   }
   
   it should "activate a user's account if the correct activation code is given" in new AuthenticatorFixture {
