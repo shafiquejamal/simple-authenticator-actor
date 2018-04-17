@@ -53,7 +53,8 @@ class Authenticator[US, UD <: UserDetails[US], J] (
     activationCodeSenderMessages: Map[String, String],
     activationCodeResenderMessages: Map[String, String],
     logMeInMessageValidator: LogMeInMessage => Option[(UUID, Option[UUID]) => LoginFieldsValidationFailedMessage[J]],
-    registerMeMessageValidator: RegisterMeMessage => Option[(UUID, Option[UUID]) => RegistrationFieldsValidationFailedMessage[J]])
+    registerMeMessageValidator: RegisterMeMessage => Option[(UUID, Option[UUID]) => RegistrationFieldsValidationFailedMessage[J]],
+    authenticatedUserMessageTranslatorProps: (UD, ActorRef, UUIDProvider) => Props)
   extends Actor with ActorLogging {
 
   override def receive: Receive = {
@@ -253,7 +254,9 @@ class Authenticator[US, UD <: UserDetails[US], J] (
       context.actorOf(
         messageRouterPropsCreator.props(
           namedClient, userDetails, timeProvider, uUIDProvider))
-    context.become(processAuthenticatedRequests(userDetails, messageRouter))
+    val authenticatedUserMessageTranslator =
+      context.actorOf(authenticatedUserMessageTranslatorProps(userDetails, messageRouter, uUIDProvider))
+    context.become(processAuthenticatedRequests(userDetails, authenticatedUserMessageTranslator))
   }
 
 }
@@ -300,7 +303,8 @@ object Authenticator {
       activationCodeSenderMessages: Map[String, String],
       activationCodeResenderMessages: Map[String, String],
       logMeInMessageValidator: LogMeInMessage => Option[(UUID, Option[UUID]) => LoginFieldsValidationFailedMessage[J]],
-      registerMeMessageValidator: RegisterMeMessage => Option[(UUID, Option[UUID]) => RegistrationFieldsValidationFailedMessage[J]]) =
+      registerMeMessageValidator: RegisterMeMessage => Option[(UUID, Option[UUID]) => RegistrationFieldsValidationFailedMessage[J]],
+      authenticatedUserMessageTranslatorProps: (UD, ActorRef, UUIDProvider) => Props) =
     Props(
       new Authenticator(
         userTokenValidator,
@@ -342,5 +346,6 @@ object Authenticator {
         activationCodeSenderMessages,
         activationCodeResenderMessages,
         logMeInMessageValidator,
-        registerMeMessageValidator))
+        registerMeMessageValidator,
+        authenticatedUserMessageTranslatorProps))
 }

@@ -10,7 +10,7 @@ import com.github.shafiquejamal.accessapi.user.{UserAPI, UserContact, UserDetail
 import com.github.shafiquejamal.accessmessage.InBound._
 import com.github.shafiquejamal.accessmessage.OutBound.{AccountActivationAttemptResultMessage, LoginFieldsValidationFailedMessage, RegistrationFieldsValidationFailedMessage, YourLoginAttemptFailedMessage}
 import com.github.shafiquejamal.simplewebsocketauthenticator.AuthenticatorMessagesFixture._
-import com.github.shafiquejamal.util.id.TestUUIDProviderImpl
+import com.github.shafiquejamal.util.id.{TestUUIDProviderImpl, UUIDProvider}
 import com.github.shafiquejamal.util.time.TestJavaInstantTimeProvider
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
@@ -124,7 +124,8 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
       override def namedClientActorName(clientId: UUID, randomUUID: UUID): String = "namedClientActorName"
     }
     val messageRouterPropsCreator = mock[MessageRouterPropsCreator[UserDetails[String]]]
-    
+    val authenticatedUserMessageTranslatorProps = AuthenticatedUserMessageTranslator.props _
+
     class DummyActor extends Actor {
       override def receive: Receive = {
         case _ =>
@@ -206,7 +207,9 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
         activationCodeSenderMessages,
         activationCodeResenderMessages,
         logMeInMessageValidator,
-        registerMeMessageValidator))
+        registerMeMessageValidator,
+        authenticatedUserMessageTranslatorProps))
+
     
     def authenticateUser() {
       resetUUID()
