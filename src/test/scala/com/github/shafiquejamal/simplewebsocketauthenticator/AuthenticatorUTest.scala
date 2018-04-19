@@ -352,6 +352,7 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
       override val maybeUsername = Some(userDetails.username)
       override val email = userDetails.email
       override val password = aPassword
+      override val maybeRegistrationCode = None
     }
     val statusOnRegistration = "aStatusOnRegistration"
     
@@ -384,6 +385,7 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
       override val maybeUsername = Some(userDetails.username)
       override val email = "we-are@spammers.com"
       override val password = aPassword
+      override val maybeRegistrationCode = None
     }
 
     resetUUID()
