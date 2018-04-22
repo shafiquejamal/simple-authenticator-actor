@@ -124,7 +124,7 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
       override def namedClientActorName(clientId: UUID, randomUUID: UUID): String = "namedClientActorName"
     }
     val messageRouterPropsCreator = mock[MessageRouterPropsCreator[UserDetails[String]]]
-    val authenticatedUserMessageTranslatorProps = AuthenticatedUserMessageTranslator.props _
+    val authenticatedUserMessageTranslatorCreator = mock[AuthenticatedUserMessageTranslatorCreator[UserDetails[String]]]
 
     class DummyActor extends Actor {
       override def receive: Receive = {
@@ -208,13 +208,14 @@ class AuthenticatorUTest() extends TestKit(ActorSystem("test-actor-system"))
         activationCodeResenderMessages,
         logMeInMessageValidator,
         registerMeMessageValidator,
-        authenticatedUserMessageTranslatorProps))
+        authenticatedUserMessageTranslatorCreator))
 
     
     def authenticateUser() {
       resetUUID()
       tokenValidator.result = Some(userDetails)
       (messageRouterPropsCreator.props _).expects(*, *, *, *).returning(DummyActor.props).anyNumberOfTimes()
+      (authenticatedUserMessageTranslatorCreator.props _).expects(*, *, *, *).returning(DummyActor.props).anyNumberOfTimes()
       authenticator ! authenticateMeMessage
       expectMsg(authenticationSuccessfulMessage(secondNewMessageUUID, Some(originatingMessageUUID)).toJSON)
     }

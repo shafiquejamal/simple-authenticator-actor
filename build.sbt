@@ -1,14 +1,14 @@
 import Dependencies._
 import sbt.{Developer, ScmInfo, StdoutOutput, url}
 
-lazy val akkaVersion = "2.+"
+lazy val akkaVersion = "2.5.12"
 
 lazy val root = (project in file(".")).
   settings(
     inThisBuild(List(
       organization := "com.github.shafiquejamal",
       scalaVersion := "2.11.11",
-      version      := "0.0.13"
+      version      := "0.0.14"
     )),
     name := "simple-websocket-authenticator",
     libraryDependencies ++= Seq(

@@ -54,7 +54,7 @@ class Authenticator[US, UD <: UserDetails[US], J] (
     activationCodeResenderMessages: Map[String, String],
     logMeInMessageValidator: LogMeInMessage => Option[(UUID, Option[UUID]) => LoginFieldsValidationFailedMessage[J]],
     registerMeMessageValidator: RegisterMeMessage => Option[(UUID, Option[UUID]) => RegistrationFieldsValidationFailedMessage[J]],
-    authenticatedUserMessageTranslatorProps: (UD, ActorRef, UUIDProvider) => Props)
+    authenticatedUserMessageTranslatorCreator: AuthenticatedUserMessageTranslatorCreator[UD])
   extends Actor with ActorLogging {
 
   override def receive: Receive = {
@@ -191,7 +191,7 @@ class Authenticator[US, UD <: UserDetails[US], J] (
       val response = youAreAlreadyAuthenticatedMessage(uUIDProvider.randomUUID(), Some(m.iD))
       unnamedClient ! response.toJSON
       log.info("Authenticator", m, response)
-      
+
     case m: LogMeInMessage =>
       val response = youAreAlreadyAuthenticatedMessage(uUIDProvider.randomUUID(), Some(m.iD))
       unnamedClient ! response.toJSON
@@ -252,10 +252,9 @@ class Authenticator[US, UD <: UserDetails[US], J] (
         namedClientProps(unnamedClient, self), clientPaths.namedClientActorName(userDetails.userID, uUIDProvider.randomUUID()))
     val messageRouter =
       context.actorOf(
-        messageRouterPropsCreator.props(
-          namedClient, userDetails, timeProvider, uUIDProvider))
+        messageRouterPropsCreator.props(namedClient, userDetails, timeProvider, uUIDProvider))
     val authenticatedUserMessageTranslator =
-      context.actorOf(authenticatedUserMessageTranslatorProps(userDetails, messageRouter, uUIDProvider))
+      context.actorOf(authenticatedUserMessageTranslatorCreator.props(userDetails, namedClient, messageRouter, uUIDProvider))
     context.become(processAuthenticatedRequests(userDetails, authenticatedUserMessageTranslator))
   }
 
@@ -304,7 +303,7 @@ object Authenticator {
       activationCodeResenderMessages: Map[String, String],
       logMeInMessageValidator: LogMeInMessage => Option[(UUID, Option[UUID]) => LoginFieldsValidationFailedMessage[J]],
       registerMeMessageValidator: RegisterMeMessage => Option[(UUID, Option[UUID]) => RegistrationFieldsValidationFailedMessage[J]],
-      authenticatedUserMessageTranslatorProps: (UD, ActorRef, UUIDProvider) => Props) =
+      authenticatedUserMessageTranslator: AuthenticatedUserMessageTranslatorCreator[UD]) =
     Props(
       new Authenticator(
         userTokenValidator,
@@ -347,5 +346,5 @@ object Authenticator {
         activationCodeResenderMessages,
         logMeInMessageValidator,
         registerMeMessageValidator,
-        authenticatedUserMessageTranslatorProps))
+        authenticatedUserMessageTranslator))
 }
