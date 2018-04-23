@@ -252,7 +252,8 @@ class Authenticator[US, UD <: UserDetails[US], J] (
         namedClientProps(unnamedClient, self), clientPaths.namedClientActorName(userDetails.userID, uUIDProvider.randomUUID()))
     val messageRouter =
       context.actorOf(
-        messageRouterPropsCreator.props(namedClient, userDetails, timeProvider, uUIDProvider))
+        messageRouterPropsCreator.props(
+          namedClient, userDetails, timeProvider, uUIDProvider))
     val authenticatedUserMessageTranslator =
       context.actorOf(authenticatedUserMessageTranslatorCreator.props(userDetails, namedClient, messageRouter, uUIDProvider))
     context.become(processAuthenticatedRequests(userDetails, authenticatedUserMessageTranslator))
