@@ -7,9 +7,9 @@ lazy val root = (project in file(".")).
   settings(
     inThisBuild(List(
       organization := "com.github.shafiquejamal",
-      scalaVersion := "2.11.11",
+      scalaVersion := "2.12.6",
       crossScalaVersions := Seq("2.11.11", "2.12.6"),
-      version      := "0.0.15"
+      version      := "0.0.16"
     )),
     name := "simple-websocket-authenticator",
     libraryDependencies ++= Seq(
@@ -17,7 +17,7 @@ lazy val root = (project in file(".")).
       "com.typesafe.akka" %% "akka-testkit" % akkaVersion % Test,
       "com.github.shafiquejamal" %% "utils" % "0.0.6",
       "com.github.shafiquejamal" %% "utils-test" % "0.0.6" % Test,
-      "com.github.shafiquejamal" %% "access-api" % "0.0.33",
+      "com.github.shafiquejamal" %% "access-api" % "0.0.34",
       "org.scalamock" %% "scalamock" % "4.1.0" % Test,
 			scalaTest % Test
 		)
