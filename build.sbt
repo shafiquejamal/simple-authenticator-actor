@@ -9,7 +9,7 @@ lazy val root = (project in file(".")).
       organization := "com.github.shafiquejamal",
       scalaVersion := "2.12.6",
       crossScalaVersions := Seq("2.11.11", "2.12.6"),
-      version      := "0.0.16"
+      version      := "0.0.18"
     )),
     name := "simple-websocket-authenticator",
     libraryDependencies ++= Seq(

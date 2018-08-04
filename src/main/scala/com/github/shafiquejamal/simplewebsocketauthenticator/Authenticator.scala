@@ -247,15 +247,22 @@ class Authenticator[US, UD <: UserDetails[US], J] (
   }
 
   private def createNamedClientAndRouter(userDetails: UD): Unit = {
+    val uniqueNameForNamedClientActor = clientPaths.namedClientActorName(userDetails.userID, uUIDProvider.randomUUID())
+    log.info(s"uniqueNameForNamedClientActor: $uniqueNameForNamedClientActor")
     val namedClient =
       context.actorOf(
-        namedClientProps(unnamedClient, self), clientPaths.namedClientActorName(userDetails.userID, uUIDProvider.randomUUID()))
+        namedClientProps(unnamedClient, self), uniqueNameForNamedClientActor)
+    log.info(s"namedClient: ${namedClient.path})")
     val messageRouter =
       context.actorOf(
         messageRouterPropsCreator.props(
-          namedClient, userDetails, timeProvider, uUIDProvider))
+          namedClient, userDetails, timeProvider, uUIDProvider), "messageRouter_" + uniqueNameForNamedClientActor)
+    log.info(s"messageRouter: ${messageRouter.path}")
     val authenticatedUserMessageTranslator =
-      context.actorOf(authenticatedUserMessageTranslatorCreator.props(userDetails, namedClient, messageRouter, uUIDProvider))
+      context.actorOf(
+        authenticatedUserMessageTranslatorCreator.props(userDetails, namedClient, messageRouter, uUIDProvider),
+        "authenticatedUserMessageTranslator_" + uniqueNameForNamedClientActor
+      )
     context.become(processAuthenticatedRequests(userDetails, authenticatedUserMessageTranslator))
   }
 
